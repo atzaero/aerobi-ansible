@@ -130,19 +130,19 @@ vaultwarden_db_password: "{{ vault_vaultwarden_db_password }}"
 
 # Cadastro público desabilitado — equipe acessa apenas por convite
 vaultwarden_signups_allowed: "false"
+vaultwarden_signups_verify: "true"
 vaultwarden_invitations_allowed: "true"
 vaultwarden_org_creation_users: ""       # vazio = qualquer usuário logado
 vaultwarden_sends_allowed: "true"
 vaultwarden_emergency_access_allowed: "true"
 vaultwarden_log_level: "warn"
 
-# SMTP — preencha para habilitar convites e alertas de segurança por email.
-# Sem SMTP: convites precisam ser feitos manualmente pelo admin.
-vaultwarden_smtp_host: ""
+# SMTP — Google Workspace via smtp.gmail.com
+vaultwarden_smtp_host: "smtp.gmail.com"
 vaultwarden_smtp_port: "587"
 vaultwarden_smtp_security: "starttls"
-vaultwarden_smtp_from: ""
-vaultwarden_smtp_username: ""
+vaultwarden_smtp_from: "noreply@aerobi.com.br"
+vaultwarden_smtp_username: "noreply@aerobi.com.br"
 
 # ------------------------------------------------------------
 # Ambiente

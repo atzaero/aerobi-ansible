@@ -14,6 +14,7 @@ vaultwarden_db_user: vaultwarden_user
 
 # Segurança — cadastro público desabilitado, acesso apenas por convite
 vaultwarden_signups_allowed: "false"
+vaultwarden_signups_verify: "false"
 vaultwarden_invitations_allowed: "true"
 
 # Organização — limita quem pode criar orgs (vazio = qualquer usuário)

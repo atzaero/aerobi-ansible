@@ -35,6 +35,7 @@
       DATABASE_URL: "postgresql://{{ vaultwarden_db_user }}:{{ vaultwarden_db_password }}@{{ postgres_container_name }}:5432/{{ vaultwarden_db }}"
       ADMIN_TOKEN: "{{ vault_vaultwarden_admin_token }}"
       SIGNUPS_ALLOWED: "{{ vaultwarden_signups_allowed }}"
+      SIGNUPS_VERIFY: "{{ vaultwarden_signups_verify }}"
       INVITATIONS_ALLOWED: "{{ vaultwarden_invitations_allowed }}"
       ORG_CREATION_USERS: "{{ vaultwarden_org_creation_users }}"
       SENDS_ALLOWED: "{{ vaultwarden_sends_allowed }}"
