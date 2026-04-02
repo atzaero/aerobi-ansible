@@ -65,7 +65,6 @@
     pull: true
     state: started
     restart_policy: unless-stopped
-    recreate: true
     ports:
       # Expõe apenas em localhost — acesso externo via Nginx
       - "127.0.0.1:{{ vaultwarden_port }}:80"
@@ -126,7 +125,7 @@
 - name: Recarregar Nginx antes de emitir certificado
   meta: flush_handlers
 
-- name: Emitir certificado SSL via Certbot para {{ vaultwarden_domain }}
+- name: Emitir/renovar certificado SSL via Certbot para {{ vaultwarden_domain }}
   command: >
     certbot --nginx
     -d {{ vaultwarden_domain }}
@@ -134,5 +133,5 @@
     --agree-tos
     -m {{ deploy_email }}
     --redirect
-  args:
-    creates: "/etc/letsencrypt/live/{{ vaultwarden_domain }}/fullchain.pem"
+    --keep-until-expiring
+  changed_when: false
