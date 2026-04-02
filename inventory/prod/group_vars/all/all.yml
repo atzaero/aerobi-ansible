@@ -141,8 +141,8 @@ vaultwarden_log_level: "warn"
 vaultwarden_smtp_host: "smtp.gmail.com"
 vaultwarden_smtp_port: "587"
 vaultwarden_smtp_security: "starttls"
-vaultwarden_smtp_from: "noreply@aerobi.com.br"
-vaultwarden_smtp_username: "noreply@aerobi.com.br"
+vaultwarden_smtp_from: "admin@aerobi.com.br"
+vaultwarden_smtp_username: "admin@aerobi.com.br"
 
 # ------------------------------------------------------------
 # Ambiente
