@@ -103,6 +103,47 @@ postgres_apps:
     user: aerobi_user
     password: "{{ vault_aerobi_db_password }}"
 
+  - name: vaultwarden
+    db: vaultwarden
+    user: vaultwarden_user
+    password: "{{ vault_vaultwarden_db_password }}"
+
+# ------------------------------------------------------------
+# Vaultwarden — cofre de senhas da equipe
+# ------------------------------------------------------------
+# Domínio: configure o DNS antes de rodar o playbook
+# Ex: vault.aerobi.com.br → A → 187.127.6.20
+#
+# Vault — adicione estas variáveis antes de executar:
+#   ansible-vault edit inventory/prod/group_vars/all/vault.yml
+#     vault_vaultwarden_admin_token: "<hash argon2 ou token plain>"
+#     vault_vaultwarden_db_password: "<senha forte>"
+#     vault_vaultwarden_smtp_password: "<senha smtp, se usar>"
+#
+vaultwarden_domain: "vault.aerobi.com.br"   # ajuste para o seu domínio
+vaultwarden_container_name: vaultwarden
+vaultwarden_port: 3010
+vaultwarden_volume_name: vaultwarden_data
+vaultwarden_db: vaultwarden
+vaultwarden_db_user: vaultwarden_user
+vaultwarden_db_password: "{{ vault_vaultwarden_db_password }}"
+
+# Cadastro público desabilitado — equipe acessa apenas por convite
+vaultwarden_signups_allowed: "false"
+vaultwarden_invitations_allowed: "true"
+vaultwarden_org_creation_users: ""       # vazio = qualquer usuário logado
+vaultwarden_sends_allowed: "true"
+vaultwarden_emergency_access_allowed: "true"
+vaultwarden_log_level: "warn"
+
+# SMTP — preencha para habilitar convites e alertas de segurança por email.
+# Sem SMTP: convites precisam ser feitos manualmente pelo admin.
+vaultwarden_smtp_host: ""
+vaultwarden_smtp_port: "587"
+vaultwarden_smtp_security: "starttls"
+vaultwarden_smtp_from: ""
+vaultwarden_smtp_username: ""
+
 # ------------------------------------------------------------
 # Ambiente
 # ------------------------------------------------------------

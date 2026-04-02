@@ -1,0 +1,109 @@
+---
+# Playbook: setup_vaultwarden.yml
+#
+# Provisiona o Vaultwarden (cofre de senhas da equipe) na VPS:
+#   1. Cria banco de dados PostgreSQL dedicado
+#   2. Sobe o container Vaultwarden
+#   3. Configura Nginx reverse proxy + SSL via Let's Encrypt
+#
+# PRÉ-REQUISITOS:
+#   1. setup_vps.yml executado (Docker, Nginx, Firewall)
+#   2. setup_database.yml executado (PostgreSQL rodando)
+#   3. DNS: vaultwarden_domain apontando para o IP da VPS
+#   4. Vault configurado com as seguintes variáveis:
+#        vault_vaultwarden_admin_token  — token de acesso ao painel /admin
+#        vault_vaultwarden_db_password  — senha do banco PostgreSQL
+#        vault_vaultwarden_smtp_password — (opcional) senha SMTP
+#
+# Como gerar o admin token com hash argon2 (recomendado):
+#   TOKEN=$(openssl rand -base64 48)
+#   echo -n "$TOKEN" | argon2 "$(openssl rand -base64 32)" -e -id -k 65540 -t 3 -p 4
+#   # Cole o hash resultante em vault_vaultwarden_admin_token
+#   # Guarde o TOKEN original — é o que você digitará no navegador
+#
+# Como adicionar as variáveis ao vault:
+#   ansible-vault edit inventory/prod/group_vars/all/vault.yml
+#
+# Uso:
+#   ansible-playbook -i inventory/prod playbooks/setup_vaultwarden.yml
+#
+# Após execução:
+#   1. Acesse https://<vaultwarden_domain>/admin com o admin token
+#   2. Convide os 3 usuários via "Invite User"
+#   3. Cada usuário aceita o convite e cria sua conta
+#   4. Admin cria uma Organização para o projeto
+#   5. Admin cria Collections (ex: "Infra", "APIs", "Cloud")
+#   6. Compartilhe senhas nas Collections da Organização
+#   7. Habilite 2FA (TOTP) — vá em Account → Two-step Login
+
+- name: Provisionar Vaultwarden
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar variáveis obrigatórias
+      fail:
+        msg: >
+          A variável '{{ item }}' é obrigatória.
+          Adicione ao vault: ansible-vault edit inventory/prod/group_vars/all/vault.yml
+      when: vars[item] | default('') == ''
+      loop:
+        - vaultwarden_domain
+        - vault_vaultwarden_admin_token
+        - vault_vaultwarden_db_password
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  Provisionando Vaultwarden"
+          - "============================================"
+          - "  Domínio  : {{ vaultwarden_domain }}"
+          - "  Porta    : {{ vaultwarden_port }}"
+          - "  Banco    : {{ vaultwarden_db }}"
+          - "  Container: {{ vaultwarden_container_name }}"
+          - "  Rede     : {{ docker_network_name }}"
+          - "============================================"
+
+    - name: Provisionar banco de dados Vaultwarden no PostgreSQL
+      include_role:
+        name: postgres_databases
+      vars:
+        postgres_apps:
+          - name: vaultwarden
+            db: "{{ vaultwarden_db }}"
+            user: "{{ vaultwarden_db_user }}"
+            password: "{{ vaultwarden_db_password }}"
+
+  roles:
+    - role: vaultwarden
+
+  post_tasks:
+    - name: Verificar saúde do container
+      community.docker.docker_container_info:
+        name: "{{ vaultwarden_container_name }}"
+      register: vw_info
+
+    - name: Exibir status do container
+      debug:
+        msg: "Status: {{ vw_info.container.State.Status }} | Health: {{ vw_info.container.State.Health.Status | default('N/A') }}"
+
+    - name: Exibir resumo final
+      debug:
+        msg:
+          - "============================================"
+          - "  Vaultwarden provisionado com sucesso!"
+          - "============================================"
+          - "  URL       : https://{{ vaultwarden_domain }}"
+          - "  Admin     : https://{{ vaultwarden_domain }}/admin"
+          - "  Container : {{ vaultwarden_container_name }}"
+          - "============================================"
+          - "  Próximos passos:"
+          - "  1. Acesse /admin com o vault_vaultwarden_admin_token"
+          - "  2. Convide os 3 usuários: Invite User → email"
+          - "  3. Crie uma Organização para o projeto Aerobi"
+          - "  4. Crie Collections: Infra / APIs / Cloud / Banco"
+          - "  5. Ative 2FA (TOTP) para todos os usuários"
+          - "  6. Instale o app Bitwarden (mobile/extensão)"
+          - "     e aponte para: https://{{ vaultwarden_domain }}"
+          - "============================================"

@@ -1,0 +1,11 @@
+---
+- name: Reiniciar Vaultwarden
+  community.docker.docker_container:
+    name: "{{ vaultwarden_container_name }}"
+    state: started
+    restart: yes
+
+- name: Recarregar Nginx
+  service:
+    name: nginx
+    state: reloaded

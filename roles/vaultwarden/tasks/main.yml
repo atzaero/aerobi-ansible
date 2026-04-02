@@ -1,0 +1,137 @@
+---
+# Role: vaultwarden
+#
+# Sobe o Vaultwarden (backend compatível com Bitwarden) via Docker
+# e configura Nginx como reverse proxy com HTTPS via Let's Encrypt.
+#
+# SEGURANÇA:
+#   - Cadastro público desabilitado — acesso apenas por convite do admin
+#   - Admin token armazenado no vault (nunca em texto claro)
+#   - Porta exposta apenas em 127.0.0.1 — nunca direta na internet
+#   - Banco PostgreSQL dedicado (não SQLite)
+#   - no-new-privileges no container
+#   - WebSocket habilitado no Nginx para notificações em tempo real
+#
+# PRÉ-REQUISITOS:
+#   - Docker instalado (role: docker)
+#   - Rede Docker criada (role: docker_network)
+#   - PostgreSQL rodando com banco vaultwarden provisionado
+#   - Nginx instalado (role: nginx)
+#   - DNS: vaultwarden_domain apontando para o IP da VPS
+
+# ----------------------------------------------------------------
+# Container
+# ----------------------------------------------------------------
+
+- name: Garantir que o volume de dados existe
+  community.docker.docker_volume:
+    name: "{{ vaultwarden_volume_name }}"
+    state: present
+
+- name: Definir env base do Vaultwarden
+  set_fact:
+    _vaultwarden_env:
+      DOMAIN: "https://{{ vaultwarden_domain }}"
+      DATABASE_URL: "postgresql://{{ vaultwarden_db_user }}:{{ vaultwarden_db_password }}@{{ postgres_container_name }}:5432/{{ vaultwarden_db }}"
+      ADMIN_TOKEN: "{{ vault_vaultwarden_admin_token }}"
+      SIGNUPS_ALLOWED: "{{ vaultwarden_signups_allowed }}"
+      INVITATIONS_ALLOWED: "{{ vaultwarden_invitations_allowed }}"
+      ORG_CREATION_USERS: "{{ vaultwarden_org_creation_users }}"
+      SENDS_ALLOWED: "{{ vaultwarden_sends_allowed }}"
+      EMERGENCY_ACCESS_ALLOWED: "{{ vaultwarden_emergency_access_allowed }}"
+      IP_HEADER: "X-Real-IP"
+      LOG_LEVEL: "{{ vaultwarden_log_level }}"
+      LOG_FILE: "/data/vaultwarden.log"
+      EXTENDED_LOGGING: "true"
+      TZ: "America/Sao_Paulo"
+
+- name: Adicionar variáveis SMTP (apenas se configurado)
+  set_fact:
+    _vaultwarden_env: "{{ _vaultwarden_env | combine({
+      'SMTP_HOST': vaultwarden_smtp_host,
+      'SMTP_PORT': vaultwarden_smtp_port,
+      'SMTP_SECURITY': vaultwarden_smtp_security,
+      'SMTP_FROM': vaultwarden_smtp_from,
+      'SMTP_USERNAME': vaultwarden_smtp_username,
+      'SMTP_PASSWORD': vault_vaultwarden_smtp_password | default('')
+    }) }}"
+  when: vaultwarden_smtp_host != ''
+
+- name: Subir container Vaultwarden
+  community.docker.docker_container:
+    name: "{{ vaultwarden_container_name }}"
+    image: "vaultwarden/server:latest"
+    pull: true
+    state: started
+    restart_policy: unless-stopped
+    recreate: true
+    ports:
+      # Expõe apenas em localhost — acesso externo via Nginx
+      - "127.0.0.1:{{ vaultwarden_port }}:80"
+    env: "{{ _vaultwarden_env }}"
+    volumes:
+      - "{{ vaultwarden_volume_name }}:/data"
+    networks:
+      - name: "{{ docker_network_name }}"
+    security_opts:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/alive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+- name: Aguardar Vaultwarden inicializar
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ vaultwarden_port }}"
+    delay: 5
+    timeout: 60
+    msg: "Vaultwarden não respondeu na porta {{ vaultwarden_port }} em 60s"
+
+# ----------------------------------------------------------------
+# Nginx + SSL
+# ----------------------------------------------------------------
+
+- name: Instalar Certbot e plugin Nginx
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+
+- name: Criar virtual host Nginx para {{ vaultwarden_domain }}
+  template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-available/vaultwarden"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recarregar Nginx
+
+- name: Habilitar virtual host vaultwarden
+  file:
+    src: "/etc/nginx/sites-available/vaultwarden"
+    dest: "/etc/nginx/sites-enabled/vaultwarden"
+    state: link
+  notify: Recarregar Nginx
+
+- name: Testar configuração do Nginx
+  command: nginx -t
+  changed_when: false
+
+- name: Recarregar Nginx antes de emitir certificado
+  meta: flush_handlers
+
+- name: Emitir certificado SSL via Certbot para {{ vaultwarden_domain }}
+  command: >
+    certbot --nginx
+    -d {{ vaultwarden_domain }}
+    --non-interactive
+    --agree-tos
+    -m {{ deploy_email }}
+    --redirect
+  args:
+    creates: "/etc/letsencrypt/live/{{ vaultwarden_domain }}/fullchain.pem"

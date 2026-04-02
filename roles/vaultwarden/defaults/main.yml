@@ -1,0 +1,36 @@
+---
+# Defaults: vaultwarden
+#
+# Valores padrão seguros para produção.
+# Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
+
+vaultwarden_container_name: vaultwarden
+vaultwarden_port: 3010
+vaultwarden_volume_name: vaultwarden_data
+
+# Banco de dados (deve corresponder à entrada em postgres_apps)
+vaultwarden_db: vaultwarden
+vaultwarden_db_user: vaultwarden_user
+
+# Segurança — cadastro público desabilitado, acesso apenas por convite
+vaultwarden_signups_allowed: "false"
+vaultwarden_invitations_allowed: "true"
+
+# Organização — limita quem pode criar orgs (vazio = qualquer usuário)
+# Defina como email(s) separados por vírgula, ou "none" para nenhum
+vaultwarden_org_creation_users: ""
+
+# Funcionalidades
+vaultwarden_sends_allowed: "true"
+vaultwarden_emergency_access_allowed: "true"
+
+# Log
+vaultwarden_log_level: "warn"
+
+# SMTP — configure para habilitar convites e alertas de segurança por email.
+# Deixe em branco para desabilitar (funcionalidade limitada sem email).
+vaultwarden_smtp_host: ""
+vaultwarden_smtp_port: "587"
+vaultwarden_smtp_security: "starttls"
+vaultwarden_smtp_from: ""
+vaultwarden_smtp_username: ""
