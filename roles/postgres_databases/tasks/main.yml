@@ -1,0 +1,82 @@
+---
+# Role: postgres_databases
+#
+# Responsabilidade: provisionar bancos de dados e usuários PostgreSQL
+# para cada aplicação definida em postgres_apps.
+#
+# Todas as tasks são idempotentes — seguro rodar múltiplas vezes.
+
+- name: Verificar se o container PostgreSQL está rodando
+  community.docker.docker_container_info:
+    name: "{{ postgres_container_name }}"
+  register: pg_info
+
+- name: Falhar se o container não estiver saudável
+  fail:
+    msg: >
+      Container '{{ postgres_container_name }}' não está rodando.
+      Execute primeiro: ansible-playbook playbooks/setup_database.yml
+  when: not pg_info.exists or pg_info.container.State.Status != 'running'
+
+- name: Criar usuário PostgreSQL para {{ item.name }}
+  shell: |
+    docker exec {{ postgres_container_name }} \
+      psql -U {{ postgres_user }} -d {{ postgres_db }} -c \
+      "DO \$app\$ BEGIN
+         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ item.user }}') THEN
+           CREATE USER {{ item.user }} WITH PASSWORD '{{ item.password }}';
+         ELSE
+           ALTER USER {{ item.user }} WITH PASSWORD '{{ item.password }}';
+         END IF;
+       END \$app\$;"
+  loop: "{{ postgres_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  changed_when: false
+
+- name: Criar banco de dados para {{ item.name }}
+  shell: |
+    docker exec {{ postgres_container_name }} \
+      psql -U {{ postgres_user }} \
+      -c "CREATE DATABASE {{ item.db }} OWNER {{ item.user }}"
+  loop: "{{ postgres_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: create_db
+  failed_when:
+    - create_db.rc != 0
+    - "'already exists' not in (create_db.stderr | default(''))"
+  changed_when: create_db.rc == 0
+
+- name: Garantir privilégios no banco {{ item.db }}
+  shell: |
+    docker exec {{ postgres_container_name }} \
+      psql -U {{ postgres_user }} \
+      -c "GRANT ALL PRIVILEGES ON DATABASE {{ item.db }} TO {{ item.user }}"
+  loop: "{{ postgres_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+
+- name: Garantir privilégios no schema public de {{ item.db }}
+  shell: |
+    docker exec {{ postgres_container_name }} \
+      psql -U {{ postgres_user }} -d {{ item.db }} \
+      -c "GRANT ALL ON SCHEMA public TO {{ item.user }}"
+  loop: "{{ postgres_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+
+- name: Exibir resumo dos bancos provisionados
+  debug:
+    msg:
+      - "============================================"
+      - "  Bancos provisionados com sucesso!"
+      - "============================================"
+      - "{% for app in postgres_apps %}  {{ app.name }}: db={{ app.db }} user={{ app.user }}{% endfor %}"
+      - "--------------------------------------------"
+      - "  Conexão interna (rede warpgate):"
+      - "  postgresql://<user>:<senha>@{{ postgres_container_name }}:5432/<db>"
+      - "============================================"

@@ -1,0 +1,146 @@
+---
+# Role: ssh_hardening
+#
+# Responsabilidade: aplicar boas práticas de segurança no SSH,
+# desabilitando login root, autenticação por senha e outras
+# configurações inseguras.
+
+- name: Desabilitar login root via SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin {{ ssh_permit_root_login }}"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Desabilitar autenticação por senha
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication {{ ssh_password_authentication }}"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Desabilitar X11Forwarding
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?X11Forwarding"
+    line: "X11Forwarding no"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Desabilitar PermitEmptyPasswords
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitEmptyPasswords"
+    line: "PermitEmptyPasswords no"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar AllowTcpForwarding (local apenas)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?AllowTcpForwarding"
+    line: "AllowTcpForwarding local"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar máximo de tentativas de autenticação
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?MaxAuthTries"
+    line: "MaxAuthTries {{ ssh_max_auth_tries }}"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Restringir SSH apenas ao usuário de deploy
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?AllowUsers"
+    line: "AllowUsers {{ deploy_user }}"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar timeout de sessões inativas
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?ClientAliveInterval"
+    line: "ClientAliveInterval 300"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar máximo de sessões inativas
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?ClientAliveCountMax"
+    line: "ClientAliveCountMax 2"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar nível de log do SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?LogLevel"
+    line: "LogLevel VERBOSE"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar algoritmos de troca de chaves modernos
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?KexAlgorithms"
+    line: "KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar cifras modernas
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?Ciphers"
+    line: "Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar MACs modernos
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?MACs"
+    line: "MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Configurar algoritmos de chave de host modernos
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?HostKeyAlgorithms"
+    line: "HostKeyAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Criar banner de acesso SSH
+  copy:
+    dest: /etc/ssh/banner.txt
+    content: |
+      =====================================================
+      Sistema privado. Acesso nao autorizado e proibido.
+      Todas as atividades sao monitoradas e registradas.
+      =====================================================
+    mode: "0644"
+
+- name: Ativar banner SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?Banner"
+    line: "Banner /etc/ssh/banner.txt"
+    state: present
+  notify: Reiniciar SSH
+
+- name: Definir permissões seguras em /etc/passwd
+  file:
+    path: /etc/passwd
+    mode: "0644"
+
+- name: Definir permissões seguras em /etc/shadow
+  file:
+    path: /etc/shadow
+    mode: "0600"

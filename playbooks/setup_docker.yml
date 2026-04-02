@@ -1,0 +1,30 @@
+---
+# Playbook: setup_docker.yml
+#
+# Descrição: instala apenas o Docker CE em servidores que já
+# foram configurados previamente. Útil para adicionar Docker
+# a uma VPS existente sem reconfigurar tudo.
+#
+# Uso:
+#   ansible-playbook -i inventory/hosts.yml playbooks/setup_docker.yml
+
+- name: Instalação do Docker
+  hosts: all
+  become: yes
+
+  roles:
+    - role: docker
+
+  post_tasks:
+    - name: Verificar instalação do Docker
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Exibir versão instalada
+      debug:
+        msg:
+          - "Docker instalado com sucesso!"
+          - "Versao: {{ docker_version.stdout }}"
+          - "Usuario {{ deploy_user }} adicionado ao grupo docker."
+          - "Reconecte a sessao SSH para que as permissoes tenham efeito."

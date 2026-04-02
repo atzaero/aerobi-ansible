@@ -1,0 +1,4 @@
+---
+# Lista de bancos de dados e usuários a provisionar.
+# Sobrescrita em inventory/*/group_vars/all/all.yml por ambiente.
+postgres_apps: []

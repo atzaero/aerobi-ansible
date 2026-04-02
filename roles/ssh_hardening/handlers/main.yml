@@ -1,0 +1,8 @@
+---
+# Handlers são executados apenas quando uma task notifica este handler.
+# Isso evita reiniciar o SSH desnecessariamente quando nada mudou.
+
+- name: Reiniciar SSH
+  service:
+    name: ssh
+    state: restarted

@@ -1,0 +1,56 @@
+---
+# Playbook: setup_vps.yml
+#
+# Descrição: configuração completa de uma VPS do zero.
+# Executa todas as roles em ordem para deixar o servidor
+# pronto para receber aplicações.
+#
+# Uso:
+#   ansible-playbook -i inventory/hosts.yml playbooks/setup_vps.yml
+#
+# Para executar apenas uma role específica use tags:
+#   ansible-playbook -i inventory/hosts.yml playbooks/setup_vps.yml --tags docker
+
+- name: Configuração completa da VPS
+  hosts: all
+  become: yes
+
+  roles:
+    - role: common
+      tags: [common, base]
+
+    - role: user
+      tags: [user]
+
+    - role: ssh_hardening
+      tags: [ssh, security]
+
+    - role: firewall
+      tags: [firewall, security]
+
+    - role: fail2ban
+      tags: [fail2ban, security]
+
+    - role: nginx
+      tags: [nginx]
+
+    - role: docker
+      tags: [docker]
+
+  post_tasks:
+    - name: Exibir resumo da configuração
+      debug:
+        msg:
+          - "============================================"
+          - "  VPS configurada com sucesso!"
+          - "============================================"
+          - "  Usuario criado : {{ deploy_user }}"
+          - "  SSH             : porta {{ ssh_port }}, apenas chaves"
+          - "  Firewall        : portas {{ ufw_allowed_ports | join(', ') }} liberadas"
+          - "  Fail2Ban        : ativo (max {{ fail2ban_maxretry }} tentativas)"
+          - "  Nginx           : instalado e rodando"
+          - "  Docker          : instalado e rodando"
+          - "============================================"
+          - "  IMPORTANTE: Reconecte com o usuario {{ deploy_user }}"
+          - "  para que as permissoes do Docker tenham efeito."
+          - "============================================"

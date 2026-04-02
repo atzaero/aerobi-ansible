@@ -1,0 +1,79 @@
+---
+# Playbook: setup_app.yml
+#
+# Descrição: configura o diretório e o virtual host Nginx para uma
+# aplicação, e emite o certificado SSL via Certbot (Let's Encrypt).
+#
+# Deve ser executado APÓS setup_vps.yml (Nginx já instalado).
+# O deploy da aplicação em si é feito pelo pipeline GitHub Actions.
+#
+# Uso:
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=elvisea_portfolio app_domain=elvisea.dev app_port=3003"
+#
+# Parâmetros obrigatórios via -e:
+#   app_name   : identificador da app, sem espaços (ex: elvisea_portfolio)
+#   app_domain : domínio público configurado no DNS (ex: elvisea.dev)
+#   app_port   : porta interna do container Docker (ex: 3003)
+#
+# Exemplos para outros projetos:
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=viki_assistant app_domain=viki.elvisea.dev app_port=3001"
+#
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=barber_shop app_domain=barber.elvisea.dev app_port=3002"
+#
+# Pré-requisito: o domínio deve estar apontando para o IP do servidor
+# antes de executar este playbook (necessário para emissão do SSL).
+
+- name: Configurar aplicação no servidor
+  hosts: all
+  become: yes
+
+  vars:
+    vhost_app_name: "{{ app_name }}"
+    vhost_domain: "{{ app_domain }}"
+    vhost_port: "{{ app_port }}"
+
+  pre_tasks:
+    - name: Validar parâmetros obrigatórios
+      fail:
+        msg: |
+          Parâmetros obrigatórios ausentes. Use:
+          ansible-playbook playbooks/setup_app.yml \
+            -e "app_name=<nome> app_domain=<domínio> app_port=<porta>"
+      when: >
+        app_name  | default('') == '' or
+        app_domain | default('') == '' or
+        app_port   | default('') == ''
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "App    : {{ app_name }}"
+          - "Domínio: {{ app_domain }}"
+          - "Porta  : {{ app_port }}"
+          - "Diret. : /home/{{ deploy_user }}/apps/{{ app_name }}"
+
+  roles:
+    - role: nginx_vhost
+
+  post_tasks:
+    - name: Exibir resumo
+      debug:
+        msg:
+          - "============================================"
+          - "  Aplicação configurada com sucesso!"
+          - "============================================"
+          - "  App      : {{ app_name }}"
+          - "  URL      : https://{{ app_domain }}"
+          - "  Porta    : {{ app_port }}"
+          - "  Diretório: /home/{{ deploy_user }}/apps/{{ app_name }}"
+          - "============================================"
+          - "  Próximos passos:"
+          - "  1. Configure os secrets no GitHub Actions"
+          - "     REMOTE_TARGET: /home/{{ deploy_user }}/apps/{{ app_name }}"
+          - "     REMOTE_USER  : {{ deploy_user }}"
+          - "     SSH_PRIVATE_KEY: (chave github-actions-cicd)"
+          - "  2. Faça push para main para disparar o deploy"
+          - "============================================"

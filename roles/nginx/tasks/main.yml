@@ -1,0 +1,25 @@
+---
+# Role: nginx
+#
+# Responsabilidade: instalar o Nginx e garantir que está
+# rodando e configurado para iniciar com o sistema.
+
+- name: Instalar Nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Garantir que Nginx está ativo e inicia com o sistema
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: Criar página padrão
+  copy:
+    content: "<html><body><h1>Servidor configurado com Ansible!</h1></body></html>"
+    dest: /var/www/html/index.html
+    owner: www-data
+    group: www-data
+    mode: "0644"
+  notify: Reiniciar Nginx

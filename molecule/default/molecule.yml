@@ -1,0 +1,51 @@
+---
+# Molecule — Configuração do ambiente de teste
+#
+# O Molecule sobe um container Docker com Ubuntu 24.04,
+# roda o playbook dentro dele e verifica se tudo funcionou.
+# Isso permite testar localmente antes de rodar em qualquer VPS real.
+
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: test-vps
+    image: geerlingguy/docker-ubuntu2404-ansible
+    pre_build_image: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /lib/systemd/systemd
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "${MOLECULE_PROJECT_DIRECTORY}/roles"
+  inventory:
+    group_vars:
+      all:
+        # Variáveis usadas durante os testes (simulam o ambiente dev)
+        deploy_user: deploy
+        deploy_email: test@test.com
+        deploy_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK5bRdeE7J6YR8GKdRUrEzrv57edB36jowlh7ReD7bRH test@test.com"
+        ssh_port: 22
+        ssh_max_auth_tries: 5
+        ssh_permit_root_login: "no"
+        ssh_password_authentication: "no"
+        ufw_allowed_ports: [22, 80, 443]
+        fail2ban_bantime: 60
+        fail2ban_maxretry: 5
+        fail2ban_findtime: 60
+        deploy_directories:
+          - apps
+          - databases
+          - scripts
+          - backups
+        environment_name: test
+
+verifier:
+  name: ansible

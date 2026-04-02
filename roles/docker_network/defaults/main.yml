@@ -1,0 +1,3 @@
+---
+# Nome da rede Docker compartilhada entre todos os serviços
+docker_network_name: warpgate

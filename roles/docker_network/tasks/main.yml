@@ -1,0 +1,12 @@
+---
+# Role: docker_network
+#
+# Cria a rede Docker compartilhada "warpgate" que conecta
+# todos os serviços (postgres, apps, etc.) entre si.
+# Aplicações se comunicam usando o nome do container como hostname.
+
+- name: Criar rede Docker compartilhada {{ docker_network_name }}
+  community.docker.docker_network:
+    name: "{{ docker_network_name }}"
+    state: present
+    driver: bridge

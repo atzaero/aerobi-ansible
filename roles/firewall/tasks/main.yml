@@ -1,0 +1,32 @@
+---
+# Role: firewall
+#
+# Responsabilidade: configurar o firewall UFW bloqueando
+# todo tráfego de entrada por padrão e liberando apenas
+# as portas necessárias (22, 80, 443).
+
+- name: Instalar UFW
+  apt:
+    name: ufw
+    state: present
+
+- name: "Definir política padrão: bloquear entradas"
+  ufw:
+    default: deny
+    direction: incoming
+
+- name: "Definir política padrão: permitir saídas"
+  ufw:
+    default: allow
+    direction: outgoing
+
+- name: Liberar portas necessárias
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ ufw_allowed_ports }}"
+
+- name: Ativar UFW
+  ufw:
+    state: enabled

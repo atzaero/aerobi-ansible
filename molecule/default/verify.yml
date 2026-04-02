@@ -1,0 +1,63 @@
+---
+# Molecule — Verify
+#
+# Após rodar o converge, o Molecule executa este playbook
+# para verificar se tudo foi configurado corretamente.
+# Cada task aqui é uma asserção — falha se algo não estiver certo.
+
+- name: Verificar configurações
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Verificar se o usuário deploy existe
+      user:
+        name: deploy
+      check_mode: yes
+      register: user_check
+      failed_when: user_check.changed
+
+    - name: Verificar se diretórios foram criados
+      stat:
+        path: "/home/deploy/{{ item }}"
+      register: dir_stat
+      failed_when: not dir_stat.stat.exists
+      loop:
+        - apps
+        - databases
+        - scripts
+        - backups
+
+    - name: Verificar se Nginx está rodando
+      service:
+        name: nginx
+        state: started
+      check_mode: yes
+      register: nginx_status
+      failed_when: nginx_status.changed
+
+    - name: Verificar se Fail2Ban está rodando
+      service:
+        name: fail2ban
+        state: started
+      check_mode: yes
+      register: fail2ban_status
+      failed_when: fail2ban_status.changed
+
+    - name: Verificar se UFW está ativo
+      command: ufw status
+      register: ufw_status
+      changed_when: false
+      failed_when: "'Status: active' not in ufw_status.stdout"
+
+    - name: Verificar configuração SSH — PermitRootLogin
+      command: grep "^PermitRootLogin no" /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Verificar configuração SSH — PasswordAuthentication
+      command: grep "^PasswordAuthentication no" /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Exibir resultado dos testes
+      debug:
+        msg: "Todos os testes passaram! O ambiente esta configurado corretamente."

@@ -1,0 +1,74 @@
+---
+# Role: common
+#
+# Responsabilidade: atualizar o sistema e instalar pacotes base
+# necessários para todas as outras roles funcionarem.
+
+- name: Atualizar cache do apt
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Atualizar todos os pacotes do sistema
+  apt:
+    upgrade: dist
+
+- name: Instalar pacotes base
+  apt:
+    name:
+      - git
+      - curl
+      - wget
+      - unzip
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - software-properties-common
+    state: present
+
+- name: Instalar unattended-upgrades (atualizações automáticas de segurança)
+  apt:
+    name: unattended-upgrades
+    state: present
+
+- name: Ativar atualizações automáticas de segurança
+  debconf:
+    name: unattended-upgrades
+    question: unattended-upgrades/enable_auto_updates
+    value: "true"
+    vtype: boolean
+
+- name: Remover pacotes desnecessários
+  apt:
+    autoremove: yes
+
+- name: Aplicar kernel hardening via sysctl
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    # Desabilitar redirecionamentos ICMP (previne ataques de roteamento)
+    - { key: "net.ipv4.conf.all.send_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.send_redirects", value: "0" }
+    - { key: "net.ipv4.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.accept_redirects", value: "0" }
+    - { key: "net.ipv6.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv6.conf.default.accept_redirects", value: "0" }
+    # Reverse path filter (previne IP spoofing)
+    - { key: "net.ipv4.conf.all.rp_filter", value: "1" }
+    - { key: "net.ipv4.conf.default.rp_filter", value: "1" }
+    # Proteção contra SYN flood
+    - { key: "net.ipv4.tcp_syncookies", value: "1" }
+    # Ignorar broadcasts ICMP (previne Smurf attacks)
+    - { key: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+    # Ignorar respostas ICMP inválidas
+    - { key: "net.ipv4.icmp_ignore_bogus_error_responses", value: "1" }
+    # Randomização de endereços de memória (ASLR)
+    - { key: "kernel.randomize_va_space", value: "2" }
+    # Desabilitar magic sysrq (evita reset remoto não autorizado)
+    - { key: "kernel.sysrq", value: "0" }
+    # Desabilitar core dumps de processos SUID
+    - { key: "fs.suid_dumpable", value: "0" }

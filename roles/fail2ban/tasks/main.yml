@@ -1,0 +1,26 @@
+---
+# Role: fail2ban
+#
+# Responsabilidade: instalar e configurar o Fail2Ban para
+# proteger o SSH contra ataques de força bruta, banindo
+# automaticamente IPs com muitas tentativas de login.
+
+- name: Instalar Fail2Ban
+  apt:
+    name: fail2ban
+    state: present
+
+- name: Copiar configuração do Fail2Ban
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reiniciar Fail2Ban
+
+- name: Garantir que Fail2Ban está ativo e inicia com o sistema
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes

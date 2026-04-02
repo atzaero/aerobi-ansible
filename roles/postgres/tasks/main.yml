@@ -1,0 +1,59 @@
+---
+# Role: postgres
+#
+# Sobe PostgreSQL 17 via Docker com configuração segura.
+#
+# SEGURANÇA:
+#   - Porta exposta apenas em 127.0.0.1 (localhost)
+#   - Nunca acessível diretamente pela internet
+#   - Acesso externo via SSH tunnel (DBeaver, etc.)
+#   - Dados persistidos em volume Docker nomeado
+#
+# REDE:
+#   - Conectado à rede "warpgate" compartilhada
+#   - Apps se conectam usando hostname: postgres
+
+- name: Garantir que o volume de dados existe
+  community.docker.docker_volume:
+    name: "{{ postgres_volume_name }}"
+    state: present
+
+- name: Subir container PostgreSQL {{ postgres_version }}
+  community.docker.docker_container:
+    name: "{{ postgres_container_name }}"
+    image: "postgres:{{ postgres_version }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      # Expõe apenas em localhost — nunca acessível pela internet
+      - "127.0.0.1:{{ postgres_port }}:5432"
+    env:
+      POSTGRES_USER: "{{ postgres_user }}"
+      POSTGRES_PASSWORD: "{{ postgres_password }}"
+      POSTGRES_DB: "{{ postgres_db }}"
+      # Configurações de performance via variável de ambiente
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+    volumes:
+      - "{{ postgres_volume_name }}:/var/lib/postgresql/data"
+    networks:
+      - name: "{{ docker_network_name }}"
+    command:
+      - postgres
+      - -c
+      - max_connections={{ postgres_max_connections }}
+      - -c
+      - shared_buffers={{ postgres_shared_buffers }}
+      - -c
+      - work_mem={{ postgres_work_mem }}
+      - -c
+      - maintenance_work_mem={{ postgres_maintenance_work_mem }}
+      - -c
+      - log_timezone=America/Sao_Paulo
+      - -c
+      - timezone=America/Sao_Paulo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

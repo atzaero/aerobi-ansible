@@ -1,0 +1,49 @@
+---
+# Playbook: setup_database.yml
+#
+# Sobe PostgreSQL via Docker na VPS com configuração segura.
+# Deve ser executado APÓS setup_vps.yml (Docker já instalado).
+#
+# Uso:
+#   # Produção
+#   ansible-playbook -i inventory/prod playbooks/setup_database.yml
+#
+#   # Dev
+#   ansible-playbook -i inventory/dev playbooks/setup_database.yml
+
+- name: Configurar banco de dados PostgreSQL
+  hosts: all
+
+  roles:
+    - role: docker_network
+      tags: [network]
+
+    - role: postgres
+      tags: [postgres, database]
+
+  post_tasks:
+    - name: Aguardar PostgreSQL ficar saudável
+      community.docker.docker_container_info:
+        name: "{{ postgres_container_name }}"
+      register: container_info
+      until: container_info.container.State.Health.Status == "healthy"
+      retries: 12
+      delay: 5
+
+    - name: Exibir resumo
+      debug:
+        msg:
+          - "============================================"
+          - "  PostgreSQL {{ postgres_version }} pronto!"
+          - "============================================"
+          - "  Container : {{ postgres_container_name }}"
+          - "  Rede      : {{ docker_network_name }}"
+          - "  Volume    : {{ postgres_volume_name }}"
+          - "  Porta     : 127.0.0.1:{{ postgres_port }} (localhost only)"
+          - "  Database  : {{ postgres_db }}"
+          - "  Usuario   : {{ postgres_user }}"
+          - "============================================"
+          - "  Acesso via DBeaver:"
+          - "  Use SSH Tunnel -> localhost:{{ postgres_port }}"
+          - "  Ver docs/DBEAVER.md para configuracao"
+          - "============================================"

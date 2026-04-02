@@ -1,0 +1,14 @@
+---
+# Role: nginx_vhost
+#
+# Variáveis com valores padrão.
+# Todas devem ser sobrescritas no playbook ou vars do inventário.
+
+# Domínio público da aplicação
+vhost_domain: ""
+
+# Porta interna onde o container/processo escuta
+vhost_port: 3000
+
+# Nome identificador da aplicação (usado para nomear arquivos e diretório)
+vhost_app_name: ""

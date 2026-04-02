@@ -1,0 +1,74 @@
+---
+# Role: nginx_vhost
+#
+# Responsabilidade: configurar um virtual host Nginx como reverse proxy
+# para uma aplicação rodando em container Docker, e emitir certificado
+# SSL via Certbot (Let's Encrypt).
+#
+# Pré-requisitos:
+#   - Nginx instalado (role: nginx)
+#   - Porta 80 e 443 abertas no firewall (role: firewall)
+#   - Domínio apontando para o IP do servidor
+#
+# Variáveis obrigatórias (definir no playbook):
+#   - vhost_domain   : domínio público (ex: elvisea.dev)
+#   - vhost_port     : porta interna do container (ex: 3003)
+#   - vhost_app_name : identificador da app (ex: elvisea_portfolio)
+
+- name: Validar variáveis obrigatórias
+  fail:
+    msg: "A variável '{{ item }}' é obrigatória e não foi definida."
+  when: vars[item] | default('') == ''
+  loop:
+    - vhost_domain
+    - vhost_app_name
+
+- name: Instalar Certbot e plugin Nginx
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+
+- name: Criar diretório da aplicação em /home/{{ deploy_user }}/apps
+  file:
+    path: "/home/{{ deploy_user }}/apps/{{ vhost_app_name }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Criar virtual host Nginx para {{ vhost_domain }}
+  template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-available/{{ vhost_app_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recarregar Nginx
+
+- name: Habilitar virtual host {{ vhost_app_name }}
+  file:
+    src: "/etc/nginx/sites-available/{{ vhost_app_name }}"
+    dest: "/etc/nginx/sites-enabled/{{ vhost_app_name }}"
+    state: link
+  notify: Recarregar Nginx
+
+- name: Testar configuração do Nginx
+  command: nginx -t
+  changed_when: false
+
+- name: Recarregar Nginx antes de emitir certificado
+  meta: flush_handlers
+
+- name: Emitir certificado SSL via Certbot para {{ vhost_domain }}
+  command: >
+    certbot --nginx
+    -d {{ vhost_domain }}
+    --non-interactive
+    --agree-tos
+    -m {{ deploy_email }}
+    --redirect
+  args:
+    creates: "/etc/letsencrypt/live/{{ vhost_domain }}/fullchain.pem"

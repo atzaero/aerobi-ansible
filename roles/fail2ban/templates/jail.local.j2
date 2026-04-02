@@ -1,0 +1,15 @@
+# Configuração do Fail2Ban
+# Gerado automaticamente pelo Ansible — não edite manualmente.
+# Para modificar, edite o template em roles/fail2ban/templates/jail.local.j2
+
+[DEFAULT]
+bantime  = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+
+[sshd]
+enabled  = true
+port     = {{ ssh_port }}
+logpath  = %(sshd_log)s
+maxretry = {{ fail2ban_maxretry }}
+bantime  = {{ fail2ban_bantime }}

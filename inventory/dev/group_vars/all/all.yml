@@ -1,0 +1,101 @@
+---
+# Variáveis — Ambiente de Desenvolvimento
+#
+# Configurações menos restritivas para facilitar testes e debugging.
+
+# ------------------------------------------------------------
+# Usuário de deploy
+# ------------------------------------------------------------
+deploy_user: deploy
+deploy_email: seu@email.com
+
+# Chaves SSH autorizadas para o usuário de deploy.
+# Em dev, normalmente apenas a chave do desenvolvedor é necessária.
+# A chave do CI/CD pode ser adicionada se quiser testar pipelines em dev.
+#
+deploy_ssh_authorized_keys:
+  # Chave do desenvolvedor principal
+  - comment: "Desenvolvedor — elvisea"
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK5bRdeE7J6YR8GKdRUrEzrv57edB36jowlh7ReD7bRH eleram@protonmail.com"
+
+  # Descomente para habilitar CI/CD também em dev:
+  # - comment: "GitHub Actions — CI/CD deploy"
+  #   key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILB7Q1E9c/nzqch9Y0UloIwvFlG1wa28ww+p7ohYbJYa github-actions-cicd"
+
+# ------------------------------------------------------------
+# SSH
+# ------------------------------------------------------------
+ssh_port: 22
+ssh_max_auth_tries: 5          # mais permissivo que prod para facilitar testes
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# ------------------------------------------------------------
+# Firewall (UFW)
+# ------------------------------------------------------------
+ufw_allowed_ports:
+  - 22
+  - 80
+  - 443
+  - 5432   # PostgreSQL (liberado em dev para acesso direto)
+  - 5433
+  - 5434
+  - 9000   # MinIO API
+  - 9001   # MinIO Console
+
+# ------------------------------------------------------------
+# Fail2Ban — menos restritivo em dev
+# ------------------------------------------------------------
+fail2ban_bantime: 300          # 5 minutos (prod usa 1 hora)
+fail2ban_maxretry: 5           # mais tentativas permitidas
+fail2ban_findtime: 600
+
+# ------------------------------------------------------------
+# Diretórios
+# ------------------------------------------------------------
+deploy_directories:
+  - apps
+  - databases
+  - scripts
+  - backups
+
+# ------------------------------------------------------------
+# Docker
+# ------------------------------------------------------------
+docker_network_name: warpgate
+
+# ------------------------------------------------------------
+# PostgreSQL — dev usa senha simples (não precisa de vault)
+# ------------------------------------------------------------
+postgres_version: "17"
+postgres_container_name: postgres
+postgres_port: 5432
+postgres_volume_name: postgres_data
+postgres_db: postgres
+postgres_user: postgres
+postgres_password: postgres   # dev: senha simples aceitável
+
+# Performance reduzida para VPS menor de dev
+postgres_max_connections: 50
+postgres_shared_buffers: 128MB
+postgres_work_mem: 2MB
+postgres_maintenance_work_mem: 32MB
+
+# ------------------------------------------------------------
+# Bancos de dados por aplicação
+# ------------------------------------------------------------
+# Dev usa senhas simples — sem vault
+postgres_apps:
+  - name: viki_assistant
+    db: viki_assistant
+    user: viki_user
+    password: viki_dev
+  - name: barber_shop
+    db: barber_shop
+    user: barber_user
+    password: barber_dev
+
+# ------------------------------------------------------------
+# Ambiente
+# ------------------------------------------------------------
+environment_name: dev

@@ -1,0 +1,19 @@
+---
+# Molecule — Converge
+#
+# Este playbook é executado dentro do container de teste.
+# Roda todas as roles do setup_vps para verificar se funcionam.
+
+- name: Converge
+  hosts: all
+  become: yes
+
+  roles:
+    - role: common
+    - role: user
+    - role: ssh_hardening
+    - role: firewall
+    - role: fail2ban
+    - role: nginx
+    # Docker não pode ser instalado dentro de container (Docker-in-Docker)
+    # Testado separadamente via ansible-playbook -i inventory/dev playbooks/setup_docker.yml

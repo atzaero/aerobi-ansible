@@ -1,0 +1,27 @@
+---
+# Molecule — Prepare
+#
+# Executado antes do converge para preparar o container com
+# pacotes que normalmente já existem em uma VPS real mas
+# não estão na imagem Docker mínima.
+
+- name: Preparar container para os testes
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Instalar openssh-server (necessário para role ssh_hardening)
+      apt:
+        name: openssh-server
+        state: present
+        update_cache: yes
+
+    - name: Garantir que /etc/ssh/sshd_config existe
+      stat:
+        path: /etc/ssh/sshd_config
+      register: sshd_config
+
+    - name: Falhar se sshd_config não foi criado
+      fail:
+        msg: "/etc/ssh/sshd_config não encontrado após instalar openssh-server"
+      when: not sshd_config.stat.exists

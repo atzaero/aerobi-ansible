@@ -1,0 +1,109 @@
+---
+# Variáveis — Ambiente de Produção
+#
+# Configurações restritivas de segurança para o servidor principal.
+
+# ------------------------------------------------------------
+# Usuário de deploy
+# ------------------------------------------------------------
+deploy_user: deploy
+deploy_email: eleram@protonmail.com
+ansible_become_password: "{{ vault_deploy_password }}"
+
+# Chaves SSH autorizadas para o usuário de deploy.
+# Chaves públicas podem ser versionadas (não são segredos).
+# Cada entrada é adicionada ao ~/.ssh/authorized_keys do usuário deploy.
+#
+# Como adicionar uma nova chave:
+#   1. Gerar par de chaves: ssh-keygen -t ed25519 -C "descricao"
+#   2. Adicionar a chave pública aqui com um comentário claro
+#   3. Aplicar: ansible-playbook playbooks/setup_vps.yml --tags user
+#
+# Como revogar uma chave:
+#   1. Remover a entrada desta lista
+#   2. Aplicar o playbook novamente
+#
+deploy_ssh_authorized_keys:
+  # Chave do desenvolvedor principal — acesso manual via terminal
+  - comment: "Desenvolvedor — elvisea"
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK5bRdeE7J6YR8GKdRUrEzrv57edB36jowlh7ReD7bRH eleram@protonmail.com"
+
+  # Chave dedicada para GitHub Actions (CI/CD).
+  # A chave PRIVADA correspondente deve ser armazenada como Secret no GitHub:
+  #   Repositório → Settings → Secrets → Actions → SSH_PRIVATE_KEY
+  # Gerada com: ssh-keygen -t ed25519 -C "github-actions-cicd" -f cicd_key -N ""
+  - comment: "GitHub Actions — CI/CD deploy"
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICSkegyGRijW9bBeNMch7vYbjl+Wc6Yqsti4KIjq/arY github-actions-cicd"
+
+# ------------------------------------------------------------
+# SSH
+# ------------------------------------------------------------
+ssh_port: 22
+ssh_max_auth_tries: 3
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# ------------------------------------------------------------
+# Firewall (UFW) — apenas portas essenciais
+# ------------------------------------------------------------
+ufw_allowed_ports:
+  - 22
+  - 80
+  - 443
+
+# ------------------------------------------------------------
+# Fail2Ban — mais restritivo em prod
+# ------------------------------------------------------------
+fail2ban_bantime: 3600         # 1 hora de ban
+fail2ban_maxretry: 3           # apenas 3 tentativas
+fail2ban_findtime: 600
+
+# ------------------------------------------------------------
+# Diretórios
+# ------------------------------------------------------------
+deploy_directories:
+  - apps
+  - databases
+  - scripts
+  - backups
+
+# ------------------------------------------------------------
+# Docker
+# ------------------------------------------------------------
+docker_network_name: warpgate
+
+# ------------------------------------------------------------
+# PostgreSQL
+# ------------------------------------------------------------
+postgres_version: "17"
+postgres_container_name: postgres
+postgres_port: 5432
+postgres_volume_name: postgres_data
+postgres_db: postgres
+postgres_user: postgres
+# Senha definida no vault — nunca commitar senhas
+# ansible-vault edit inventory/prod/group_vars/vault.yml
+postgres_password: "{{ vault_postgres_password }}"
+
+# Performance (ajuste conforme RAM da VPS)
+postgres_max_connections: 100
+postgres_shared_buffers: 256MB
+postgres_work_mem: 4MB
+postgres_maintenance_work_mem: 64MB
+
+# ------------------------------------------------------------
+# Bancos de dados por aplicação
+# ------------------------------------------------------------
+# Cada entrada gera: banco, usuário e privilégios no PostgreSQL.
+# Senhas definidas no vault — nunca commitar em texto claro.
+# Para adicionar uma app nova: adicionar entrada aqui + senha no vault.
+postgres_apps:
+  - name: aerobi
+    db: aerobi
+    user: aerobi_user
+    password: "{{ vault_aerobi_db_password }}"
+
+# ------------------------------------------------------------
+# Ambiente
+# ------------------------------------------------------------
+environment_name: prod

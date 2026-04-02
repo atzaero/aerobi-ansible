@@ -1,0 +1,17 @@
+---
+# Playbook: setup_app_databases.yml
+#
+# Provisiona bancos de dados e usuários PostgreSQL para cada
+# aplicação definida em postgres_apps (group_vars/all/all.yml).
+#
+# Uso:
+#   ansible-playbook playbooks/setup_app_databases.yml          # produção (padrão)
+#   ansible-playbook -i inventory/dev playbooks/setup_app_databases.yml  # dev
+#
+# Pré-requisito: PostgreSQL já instalado via setup_database.yml
+
+- name: Provisionar bancos de dados por aplicação
+  hosts: all
+
+  roles:
+    - role: postgres_databases

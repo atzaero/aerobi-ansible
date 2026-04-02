@@ -1,0 +1,23 @@
+# Ambiente virtual Python
+.venv/
+
+# Ignorar arquivos sensíveis
+*.retry
+.env
+secrets/
+
+# Senhas do Ansible Vault (nunca versionar)
+.vault_pass*
+vault_pass*
+*vault*pass*
+
+# Nunca versionar chaves SSH
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# Editor
+.vscode/
+.idea/
+*.swp

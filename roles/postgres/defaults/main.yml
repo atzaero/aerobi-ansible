@@ -1,0 +1,28 @@
+---
+# Versão do PostgreSQL
+postgres_version: "17"
+
+# Container
+postgres_container_name: postgres
+
+# Credenciais — sobrescreva via group_vars ou vault
+postgres_user: postgres
+postgres_password: changeme
+postgres_db: postgres
+
+# Porta — exposta apenas em localhost (não para a internet)
+# Acesso externo via SSH tunnel (DBeaver)
+postgres_port: 5432
+
+# Volume para persistência dos dados
+postgres_volume_name: postgres_data
+
+# Rede Docker compartilhada
+docker_network_name: warpgate
+
+# Configurações de performance (ajuste conforme RAM disponível)
+# Recomendado: shared_buffers = 25% da RAM total
+postgres_max_connections: 100
+postgres_shared_buffers: 256MB
+postgres_work_mem: 4MB
+postgres_maintenance_work_mem: 64MB

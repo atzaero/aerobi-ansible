@@ -1,0 +1,68 @@
+---
+# Role: user
+#
+# Responsabilidade: criar o usuário de deploy, configurar SSH
+# e criar a estrutura de diretórios do projeto.
+#
+# Chaves SSH:
+#   O usuário de deploy aceita múltiplas chaves definidas em
+#   deploy_ssh_authorized_keys (group_vars/all/all.yml).
+#   Cada chave tem um comentário identificando sua origem.
+#   Exemplos de entradas:
+#     - { comment: "Desenvolvedor", key: "ssh-ed25519 AAAA..." }
+#     - { comment: "GitHub Actions CI/CD", key: "ssh-ed25519 AAAA..." }
+
+- name: Criar usuário {{ deploy_user }}
+  user:
+    name: "{{ deploy_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: yes
+    password: "{{ vault_deploy_password | string | password_hash('sha512') }}"
+    state: present
+
+- name: Criar diretório .ssh para o usuário {{ deploy_user }}
+  file:
+    path: "/home/{{ deploy_user }}/.ssh"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0700"
+
+- name: Adicionar chaves SSH autorizadas ao usuário {{ deploy_user }}
+  authorized_key:
+    user: "{{ deploy_user }}"
+    key: "{{ item.key }}"
+    comment: "{{ item.comment }}"
+    state: present
+  loop: "{{ deploy_ssh_authorized_keys }}"
+  loop_control:
+    label: "{{ item.comment }}"
+  # Para adicionar uma nova chave (ex: novo desenvolvedor ou serviço):
+  #   1. Adicionar entrada em deploy_ssh_authorized_keys no group_vars
+  #   2. Rodar: ansible-playbook playbooks/setup_vps.yml --tags user
+  # Para revogar uma chave: remover a entrada e rodar o playbook.
+  # O módulo authorized_key não remove chaves automaticamente —
+  # use exclusive: yes para gerenciar o arquivo inteiro pelo Ansible.
+
+- name: Criar estrutura de diretórios para {{ deploy_user }}
+  file:
+    path: "/home/{{ deploy_user }}/{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+  loop: "{{ deploy_directories }}"
+
+- name: Configurar sudo restrito para o usuário {{ deploy_user }}
+  copy:
+    dest: /etc/sudoers.d/{{ deploy_user }}
+    content: |
+      # Permite apenas comandos necessários para deploy e operação
+      # NOPASSWD:ALL foi removido — viola princípio de least privilege
+      Defaults:{{ deploy_user }} use_pty
+      Defaults:{{ deploy_user }} log_output
+      {{ deploy_user }} ALL=(ALL) NOPASSWD:/usr/bin/docker,/usr/bin/docker compose,/usr/bin/systemctl,/usr/sbin/nginx,/usr/bin/certbot,/usr/bin/fail2ban-client
+    validate: visudo -cf %s
+    mode: "0440"

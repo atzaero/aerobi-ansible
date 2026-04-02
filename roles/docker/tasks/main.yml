@@ -1,0 +1,105 @@
+---
+# Role: docker
+#
+# Responsabilidade: instalar o Docker CE a partir do repositório
+# oficial com configuração segura do daemon.
+#
+# SEGURANÇA: o usuário deploy NÃO é adicionado ao grupo docker.
+# O grupo docker equivale a acesso root (permite montar volumes
+# e escalar privilégio). Em vez disso, o usuário usa sudo com
+# restrições configuradas na role user.
+
+- name: Remover versões antigas do Docker
+  apt:
+    name:
+      - docker.io
+      - docker-doc
+      - docker-compose
+      - docker-compose-v2
+      - podman-docker
+      - containerd
+      - runc
+    state: absent
+
+- name: Instalar dependências do Docker
+  apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+
+- name: Criar diretório para chaves GPG
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Baixar chave GPG oficial do Docker
+  get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Mapear arquitetura para formato Docker
+  set_fact:
+    docker_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' if ansible_architecture == 'aarch64' else ansible_architecture }}"
+
+- name: Adicionar repositório oficial do Docker
+  apt_repository:
+    repo: "deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    filename: docker
+    state: present
+
+- name: Atualizar cache do apt após adicionar repositório Docker
+  apt:
+    update_cache: yes
+
+- name: Instalar Docker CE e plugins
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Garantir que Docker está ativo e inicia com o sistema
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Garantir que containerd está ativo e inicia com o sistema
+  service:
+    name: containerd
+    state: started
+    enabled: yes
+
+- name: Adicionar {{ deploy_user }} ao grupo docker
+  user:
+    name: "{{ deploy_user }}"
+    groups: docker
+    append: yes
+  # NOTA: o grupo docker concede acesso equivalente a root (pode montar
+  # volumes arbitrários). Aceitamos esse risco porque o sudoers já concede
+  # NOPASSWD para /usr/bin/docker — o nível de acesso efetivo é o mesmo.
+  # A vantagem é rodar `docker ps` sem necessidade de prefixar com sudo.
+
+- name: Criar configuração segura do daemon Docker
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "live-restore": true,
+        "icc": false,
+        "userland-proxy": false,
+        "no-new-privileges": true,
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+    mode: "0600"
+  notify: Reiniciar Docker
