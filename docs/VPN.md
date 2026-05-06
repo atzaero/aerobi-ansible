@@ -303,79 +303,201 @@ Hoje continua via SSH tunnel (ver `docs/DBEAVER.md`). Depois da issue #7, será 
 
 ---
 
-## Operação
+## Comandos do dia a dia — cliente Tailscale (sua máquina)
 
-### Listar nodes na tailnet
+Os comandos abaixo são para o cliente Tailscale rodando no laptop/desktop (Linux/macOS). No Android/iOS, as ações equivalentes ficam no app — o que está aqui pressupõe terminal.
+
+### Conexão e desconexão
+
+```bash
+# Conectar (primeira vez ou depois de logout)
+sudo tailscale up \
+  --login-server=https://headscale.aerobi.com.br \
+  --authkey=hskey-auth-... \
+  --hostname=$(hostname)
+
+# Desconectar — preserva configuração e credenciais; basta `tailscale up`
+# (sem flags) para reconectar depois.
+sudo tailscale down
+
+# Reconectar após `down` (sem precisar de auth key de novo)
+sudo tailscale up
+
+# Logout total — apaga credenciais. Próxima conexão precisa de nova auth key.
+sudo tailscale logout
+```
+
+### Status e diagnóstico
+
+```bash
+# Ver nós da tailnet, status de conexão de cada um e seu próprio IP
+tailscale status
+
+# Apenas seu IP IPv4 / IPv6 na tailnet
+tailscale ip -4
+tailscale ip -6
+
+# JSON estruturado (útil pra scripts)
+tailscale status --json
+
+# Testa conexão peer-to-peer com outro nó (latência + caminho usado: direto vs DERP)
+tailscale ping vps-prod
+tailscale ping 100.64.0.1
+
+# Diagnóstico de NAT, DERP relays e conectividade UDP
+tailscale netcheck
+
+# Quem é o dono de um IP da tailnet?
+tailscale whois 100.64.0.1
+```
+
+### Ajustar settings sem desconectar
+
+```bash
+# Habilitar DNS push do Headscale (extra_records) — necessário pra
+# vault.aerobi.com.br resolver via tailnet
+sudo tailscale set --accept-dns=true
+
+# Aceitar rotas anunciadas por outros nós (ex: subnet de câmeras
+# anunciada por servidor de aeródromo)
+sudo tailscale set --accept-routes=true
+
+# Mudar hostname do nó (sem reconectar)
+sudo tailscale set --hostname=novo-nome
+```
+
+### Daemon e systemd
+
+```bash
+# Status do daemon
+systemctl status tailscaled
+
+# Logs em tempo real
+journalctl -u tailscaled -f
+
+# Reiniciar (geralmente desnecessário)
+sudo systemctl restart tailscaled
+```
+
+### Versão
+
+```bash
+tailscale version
+```
+
+---
+
+## Comandos do dia a dia — servidor Headscale (VPS)
+
+Conectar primeiro:
 
 ```bash
 ssh deploy@187.127.6.20
-docker exec headscale headscale nodes list
+```
+
+Todos os comandos abaixo rodam **dentro** do container `headscale` via `docker exec`.
+
+### Listar usuários e nodes
+
+```bash
+# Usuários da tailnet (hoje só "aerobi" com id=1)
 docker exec headscale headscale users list
-```
 
-### Renomear um node
-
-O app Tailscale Android, quando autenticado por pre-auth key, frequentemente atribui um hostname placeholder do tipo `invalid-b2hd95oi`. Pode acontecer com outros clientes também. Para renomear:
-
-```bash
-ssh deploy@187.127.6.20
-
-# Pegar o ID do node
+# Todos os nodes (sua VPS, laptops, celulares, etc.)
 docker exec headscale headscale nodes list
 
-# Renomear (ID 3 → android-elvis)
+# Mesmo, em JSON (útil pra scripts)
+docker exec headscale headscale nodes list -o json
+```
+
+### Gerenciar nodes
+
+```bash
+# Renomear (resolve placeholder tipo "invalid-b2hd95oi" do Android)
 docker exec headscale headscale nodes rename --identifier 3 android-elvis
+
+# Expirar (marca como revogado; conexões existentes caem na próxima validação)
+docker exec headscale headscale nodes expire --identifier <ID>
+
+# Deletar definitivamente (não recupera; o IP fica livre pra reuso)
+docker exec headscale headscale nodes delete --identifier <ID>
+
+# Mudar tags de um node já cadastrado
+docker exec headscale headscale nodes tag --identifier <ID> --tags tag:dev
+
+# Registrar manualmente uma machine key (Método C de autenticação)
+docker exec headscale headscale nodes register \
+  --user 1 --key mkey:abc123... --tags tag:dev
 ```
 
-O cliente vai refletir o novo nome na próxima sincronização (poucos segundos). Não derruba a conexão.
-
-Convenção sugerida: `<plataforma>-<dono>` (ex: `android-elvis`, `iphone-maria`, `laptop-joao`).
-
-### Revogar um device
+### Gerenciar pre-auth keys
 
 ```bash
-# Pegar o ID do node
-docker exec headscale headscale nodes list
+# Criar key reusable para devices admin
+docker exec headscale headscale preauthkeys create \
+  --user 1 --reusable --expiration 90d --tags tag:dev
 
-# Expirar (marca como revogado, conexões existentes caem)
-docker exec headscale headscale nodes expire --identifier <NODE_ID>
+# Criar key one-time-use para servidor de aeródromo
+docker exec headscale headscale preauthkeys create \
+  --user 1 --expiration 90d --tags tag:airfield
 
-# Ou deletar definitivamente
-docker exec headscale headscale nodes delete --identifier <NODE_ID>
-```
-
-### Renovar pre-auth key (a cada 90 dias)
-
-A key configurada no [`vault.yml`](../inventory/prod/group_vars/all/vault.yml) (`vault_headscale_authkey_vps`) é usada pela própria VPS pra entrar na tailnet. Ela só é consumida quando o `tailscale up` roda na primeira vez — re-runs do playbook pulam (idempotência). Não precisa renovar essa específica a menos que a VPS perca o estado Tailscale.
-
-Para keys de novos dispositivos (`tag:dev`, `tag:airfield`), gere conforme o Passo 1 acima.
-
-### Listar pre-auth keys ativas
-
-```bash
+# Listar keys (ativas e expiradas)
 docker exec headscale headscale preauthkeys list --user 1
+
+# Expirar uma key (revoga)
+docker exec headscale headscale preauthkeys expire <KEY>
 ```
 
-### Revogar uma pre-auth key
+### ACL (políticas de acesso)
 
 ```bash
-docker exec headscale headscale preauthkeys expire <KEY_PREFIX>
+# Ver a ACL atual aplicada
+docker exec headscale headscale policy get
+
+# Aplicar uma ACL nova (já vem montada via Ansible em /etc/headscale/acl.json,
+# mas se quiser reaplicar manualmente após mexer no template):
+docker exec headscale headscale policy set -f /etc/headscale/acl.json
+
+# Validar o config.yaml inteiro sem reiniciar
+docker exec headscale headscale configtest
 ```
 
-### Logs do Headscale
+### Saúde, versão, logs
 
 ```bash
-ssh deploy@187.127.6.20
+# Health check (exatamente o mesmo que o Docker healthcheck usa)
+docker exec headscale headscale health
+
+# Versão
+docker exec headscale headscale version
+
+# Logs (toda a saída do daemon)
+docker logs headscale
+
+# Logs em tempo real (Ctrl+C para sair)
 docker logs -f headscale
+
+# Últimas N linhas
+docker logs --tail=50 headscale
+
+# Restart do container (não derruba a tailnet — clientes reconectam sozinhos)
+docker restart headscale
 ```
 
-### Status do daemon Tailscale na VPS
+### Daemon Tailscale na própria VPS
+
+A VPS também é um cliente Tailscale (com IP `100.64.0.1`). Os mesmos comandos de cliente acima funcionam aqui, prefixando `sudo`:
 
 ```bash
-ssh deploy@187.127.6.20
 sudo tailscale status
 sudo tailscale ip -4   # 100.64.0.1
 ```
+
+### Renovar a pre-auth key da VPS (a cada 90 dias)
+
+A key configurada em [`vault.yml`](../inventory/prod/group_vars/all/vault.yml) (`vault_headscale_authkey_vps`) é usada apenas no primeiro `tailscale up` da VPS. Re-runs do playbook pulam (idempotência), então a renovação só importa se a VPS perder o estado Tailscale (volume `/var/lib/tailscale` deletado, reinstalação, etc).
+
+Pra novas keys de admin/aeródromo, ver [Métodos de autenticação](#métodos-de-autenticação) acima.
 
 ---
 
