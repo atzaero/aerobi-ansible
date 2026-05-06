@@ -20,12 +20,26 @@
     default: allow
     direction: outgoing
 
-- name: Liberar portas necessárias
+- name: Liberar portas TCP necessárias
   ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
   loop: "{{ ufw_allowed_ports }}"
+
+- name: Liberar portas UDP necessárias (Tailscale WireGuard)
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: udp
+  loop: "{{ ufw_allowed_udp_ports | default([]) }}"
+
+- name: Permitir todo tráfego entrante na interface tailscale0
+  ufw:
+    rule: allow
+    direction: in
+    interface: tailscale0
+  when: ufw_allow_tailscale_interface | default(false)
 
 - name: Ativar UFW
   ufw:

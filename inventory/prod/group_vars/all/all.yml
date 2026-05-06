@@ -51,6 +51,15 @@ ufw_allowed_ports:
   - 80
   - 443
 
+# Portas UDP — Tailscale/WireGuard usam 41641 para handshake P2P
+ufw_allowed_udp_ports:
+  - 41641
+
+# Tráfego entre nós da tailnet é confiável (ACLs aplicadas pelo Headscale).
+# Liberar a interface tailscale0 inteira evita criar regra por porta para
+# cada novo serviço acessível via VPN.
+ufw_allow_tailscale_interface: true
+
 # ------------------------------------------------------------
 # Fail2Ban — mais restritivo em prod
 # ------------------------------------------------------------
@@ -108,6 +117,11 @@ postgres_apps:
     user: vaultwarden_user
     password: "{{ vault_vaultwarden_db_password }}"
 
+  - name: headscale
+    db: headscale
+    user: headscale_user
+    password: "{{ vault_headscale_db_password }}"
+
 # ------------------------------------------------------------
 # Vaultwarden — cofre de senhas da equipe
 # ------------------------------------------------------------
@@ -143,6 +157,30 @@ vaultwarden_smtp_port: "587"
 vaultwarden_smtp_security: "starttls"
 vaultwarden_smtp_from: "admin@aerobi.com.br"
 vaultwarden_smtp_username: "admin@aerobi.com.br"
+
+# ------------------------------------------------------------
+# Headscale — control plane VPN self-hosted (issue #5)
+# ------------------------------------------------------------
+# Domínio: configure o DNS antes de rodar o playbook
+# Ex: headscale.aerobi.com.br → A → 187.127.6.20
+#
+# Vault — adicione antes de aplicar:
+#   ansible-vault edit inventory/prod/group_vars/all/vault.yml
+#     vault_headscale_db_password: "<senha forte>"
+#     vault_headscale_authkey_vps: ""   # preenchido depois (ver abaixo)
+#
+# Após o primeiro deploy do Headscale, gerar pre-auth key:
+#   docker exec headscale headscale preauthkeys create \
+#     --user aerobi --reusable --expiration 90d --tags tag:vps
+# Salvar no vault como vault_headscale_authkey_vps e re-aplicar.
+#
+headscale_domain: "headscale.aerobi.com.br"
+headscale_user_name: aerobi
+
+# ------------------------------------------------------------
+# Tailscale client — conecta nós ao Headscale
+# ------------------------------------------------------------
+tailscale_tags: "tag:vps"
 
 # ------------------------------------------------------------
 # Ambiente

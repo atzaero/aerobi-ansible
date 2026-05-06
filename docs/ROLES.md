@@ -126,3 +126,48 @@ docker --version
 docker compose version
 docker run hello-world
 ```
+
+---
+
+## headscale
+
+**Tag:** `headscale`, `vpn`
+
+**O que faz:**
+- Sobe o Headscale como container (`headscale/headscale`) com config gerada do template
+- Reusa o PostgreSQL existente como banco (database `headscale`)
+- Cria virtual host Nginx em `headscale.aerobi.com.br` com SSL via Let's Encrypt
+- Renderiza ACL em `acl.json` com tags `tag:vps`, `tag:airfield`, `tag:dev`
+- Garante que o user `aerobi` existe na tailnet
+
+**Por que importa:**
+Control plane self-hosted compatível com clientes Tailscale. Permite mesh VPN entre VPS, dev, celular e (futuramente) servidores de aeródromo, sem cap de devices nem dependência SaaS.
+
+**Provisionamento manual após primeiro deploy:**
+```bash
+# Gerar pre-auth key reusable da VPS
+docker exec headscale headscale preauthkeys create \
+  --user aerobi --reusable --expiration 90d --tags tag:vps
+
+# Salvar a key no vault como vault_headscale_authkey_vps
+ansible-vault encrypt_string --vault-id default@~/.ansible-vault/prod \
+  --encrypt-vault-id default --stdin-name 'vault_headscale_authkey_vps'
+```
+
+---
+
+## tailscale_client
+
+**Tag:** `tailscale`, `vpn`
+
+**O que faz:**
+- Adiciona o repo APT oficial do Tailscale e instala o pacote
+- Habilita `tailscaled.service`
+- Conecta ao Headscale via `tailscale up --login-server=https://headscale.aerobi.com.br --authkey=…`
+
+**Idempotência:**
+- Pula `tailscale up` se o nó já está autenticado e o backend está `Running`
+- Se `vault_headscale_authkey_vps` está vazio (primeiro deploy do Headscale, antes de gerar key), a role inteira é pulada via `meta: end_play`
+
+**Por que importa:**
+É o que efetivamente coloca a VPS na tailnet. Sem ele, o Headscale roda mas não tem clientes.

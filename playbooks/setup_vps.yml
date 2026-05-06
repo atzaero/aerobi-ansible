@@ -37,6 +37,9 @@
     - role: docker
       tags: [docker]
 
+    - role: tailscale_client
+      tags: [tailscale, vpn]
+
   post_tasks:
     - name: Exibir resumo da configuração
       debug:
@@ -50,6 +53,7 @@
           - "  Fail2Ban        : ativo (max {{ fail2ban_maxretry }} tentativas)"
           - "  Nginx           : instalado e rodando"
           - "  Docker          : instalado e rodando"
+          - "  Tailscale       : {{ 'conectado à tailnet' if vault_headscale_authkey_vps | default('') != '' else 'pacote pronto, aguardando authkey' }}"
           - "============================================"
           - "  IMPORTANTE: Reconecte com o usuario {{ deploy_user }}"
           - "  para que as permissoes do Docker tenham efeito."

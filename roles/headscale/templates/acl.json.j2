@@ -1,0 +1,19 @@
+{
+  "tagOwners": {
+    "tag:vps": ["{{ headscale_user_name }}@"],
+    "tag:airfield": ["{{ headscale_user_name }}@"],
+    "tag:dev": ["{{ headscale_user_name }}@"]
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["tag:dev"],
+      "dst": ["*:*"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:vps"],
+      "dst": ["tag:airfield:*"]
+    }
+  ]
+}

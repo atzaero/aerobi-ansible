@@ -1,0 +1,11 @@
+---
+- name: Reiniciar Headscale
+  community.docker.docker_container:
+    name: "{{ headscale_container_name }}"
+    state: started
+    restart: yes
+
+- name: Recarregar Nginx
+  service:
+    name: nginx
+    state: reloaded

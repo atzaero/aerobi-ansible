@@ -1,0 +1,81 @@
+---
+# Playbook: setup_headscale.yml
+#
+# Provisiona o Headscale (control plane VPN self-hosted) na VPS:
+#   1. Cria banco de dados PostgreSQL dedicado
+#   2. Sobe o container Headscale
+#   3. Configura Nginx reverse proxy + SSL via Let's Encrypt
+#   4. Garante o user "aerobi" na tailnet
+#
+# PRÉ-REQUISITOS:
+#   1. setup_vps.yml executado (Docker, Nginx, Firewall)
+#   2. setup_database.yml executado (PostgreSQL rodando)
+#   3. DNS: headscale_domain apontando para o IP da VPS
+#   4. Vault configurado:
+#        vault_headscale_db_password — senha forte do banco
+#        vault_headscale_authkey_vps  — vazio inicialmente, preenchido depois
+#
+# Uso:
+#   ansible-playbook -i inventory/prod playbooks/setup_headscale.yml
+#
+# PRIMEIRA EXECUÇÃO (bootstrap):
+#   1. Roda este playbook → Headscale up + user "aerobi" criado
+#   2. Manualmente, gerar pre-auth key:
+#        docker exec headscale headscale preauthkeys create \
+#          --user aerobi --reusable --expiration 90d --tags tag:vps
+#   3. Salvar a key no vault:
+#        ansible-vault encrypt_string --vault-id default@~/.ansible-vault/prod \
+#          --encrypt-vault-id default --stdin-name 'vault_headscale_authkey_vps'
+#      e substituir vault_headscale_authkey_vps no vault.yml
+#   4. Rodar `ansible-playbook -i inventory/prod playbooks/setup_vps.yml --tags tailscale`
+#      para conectar a VPS na tailnet.
+
+- name: Provisionar Headscale
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar variáveis obrigatórias
+      fail:
+        msg: >
+          A variável '{{ item }}' é obrigatória.
+          Adicione ao vault: ansible-vault edit inventory/prod/group_vars/all/vault.yml
+      when: vars[item] | default('') == ''
+      loop:
+        - headscale_domain
+        - vault_headscale_db_password
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  Provisionando Headscale"
+          - "============================================"
+          - "  Domínio  : {{ headscale_domain }}"
+          - "  User     : {{ headscale_user_name }}"
+          - "  Banco    : headscale"
+          - "  Container: {{ headscale_container_name | default('headscale') }}"
+          - "============================================"
+
+    - name: Provisionar banco de dados Headscale no PostgreSQL
+      include_role:
+        name: postgres_databases
+      vars:
+        postgres_apps:
+          - name: headscale
+            db: headscale
+            user: headscale_user
+            password: "{{ vault_headscale_db_password }}"
+
+  roles:
+    - role: headscale
+
+  post_tasks:
+    - name: Verificar saúde do container
+      community.docker.docker_container_info:
+        name: "{{ headscale_container_name | default('headscale') }}"
+      register: hs_info
+
+    - name: Exibir status do container
+      debug:
+        msg: "Status: {{ hs_info.container.State.Status }} | Health: {{ hs_info.container.State.Health.Status | default('N/A') }}"

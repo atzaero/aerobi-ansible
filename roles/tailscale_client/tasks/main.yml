@@ -1,0 +1,96 @@
+---
+# Role: tailscale_client
+#
+# Instala o cliente Tailscale oficial e o conecta ao control plane Headscale.
+#
+# IDEMPOTÊNCIA:
+#   - Se já estiver conectado e o login server bater, pula `tailscale up`.
+#   - Se vault_headscale_authkey_vps não estiver definido, pula tudo
+#     (caso de primeiro deploy do Headscale, antes de gerar a key).
+#
+# PRÉ-REQUISITOS:
+#   - Headscale up (role: headscale)
+#   - DNS de headscale_domain resolvendo + cert válido
+#   - Pre-auth key gerada e salva em vault_headscale_authkey_vps
+
+- name: Pular se a pre-auth key não estiver configurada (primeiro deploy)
+  meta: end_play
+  when: tailscale_authkey == ''
+
+- name: Adicionar GPG key oficial do Tailscale
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+- name: Adicionar repositório APT do Tailscale
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu noble main"
+    filename: tailscale
+    state: present
+    update_cache: yes
+
+- name: Instalar pacote tailscale
+  apt:
+    name: tailscale
+    state: present
+
+- name: Habilitar e iniciar tailscaled
+  service:
+    name: tailscaled
+    state: started
+    enabled: yes
+
+- name: Verificar status atual do Tailscale
+  command: tailscale status --json
+  register: ts_status
+  changed_when: false
+  failed_when: false
+
+- name: Detectar se o nó já está autenticado no Headscale correto
+  set_fact:
+    tailscale_already_connected: >-
+      {{
+        ts_status.rc == 0 and
+        (ts_status.stdout | from_json).BackendState == 'Running' and
+        ((ts_status.stdout | from_json).CurrentTailnet.Name | default('')) != ''
+      }}
+
+- name: Conectar ao Headscale
+  command: >
+    tailscale up
+    --login-server={{ tailscale_login_server }}
+    --authkey={{ tailscale_authkey }}
+    --hostname={{ tailscale_hostname }}
+    --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
+    --accept-dns={{ 'true' if tailscale_accept_dns else 'false' }}
+  when: not tailscale_already_connected
+  no_log: true
+  register: ts_up
+  changed_when: ts_up.rc == 0
+
+# Para nós já conectados (skip do `tailscale up` acima), aplicar
+# accept-dns/accept-routes via `tailscale set` — não derruba a sessão.
+- name: Aplicar settings dinâmicos no nó já conectado
+  command: >
+    tailscale set
+    --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
+    --accept-dns={{ 'true' if tailscale_accept_dns else 'false' }}
+  when: tailscale_already_connected
+  changed_when: false
+
+- name: Obter IP Tailscale do nó
+  command: tailscale ip -4
+  register: ts_ip
+  changed_when: false
+
+- name: Exibir IP Tailscale
+  debug:
+    msg:
+      - "============================================"
+      - "  Conectado à tailnet Aerobi"
+      - "============================================"
+      - "  Hostname  : {{ tailscale_hostname }}"
+      - "  IP        : {{ ts_ip.stdout }}"
+      - "  Login srv : {{ tailscale_login_server }}"
+      - "============================================"

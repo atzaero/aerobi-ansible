@@ -1,0 +1,27 @@
+---
+# Defaults: tailscale_client
+#
+# Cliente Tailscale (oficial) conectado ao control plane Headscale self-hosted.
+
+# Servidor Headscale — clientes Tailscale conectam aqui ao invés do SaaS Tailscale
+tailscale_login_server: "https://{{ headscale_domain }}"
+
+# Hostname do nó na tailnet (default: hostname do inventory)
+tailscale_hostname: "{{ inventory_hostname }}"
+
+# Tags atribuídas ao nó. Devem corresponder a tagOwners no acl.json do Headscale.
+# Para a VPS Aerobi: tag:vps. Aeródromos: tag:airfield. Dev/celular: tag:dev.
+tailscale_tags: "tag:vps"
+
+# Pre-auth key vinda do vault. Gerada manualmente após o Headscale subir.
+# Se vazio, a role pula a conexão (idempotente em primeiro deploy).
+tailscale_authkey: "{{ vault_headscale_authkey_vps | default('') }}"
+
+# Aceitar rotas anunciadas por outros nós (servidores de aeródromo anunciam câmeras)
+tailscale_accept_routes: true
+
+# DNS da tailnet — true habilita MagicDNS + extra_records do Headscale.
+# Necessário para que `vault.aerobi.com.br` (e outros domínios listados em
+# extra_records) resolvam pelo IP da tailnet quando o cliente está conectado,
+# fazendo com que o request passe pela tailnet0 e o Nginx aceite no `/admin`.
+tailscale_accept_dns: true

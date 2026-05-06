@@ -1,0 +1,187 @@
+---
+# Role: headscale
+#
+# Sobe o Headscale (control plane self-hosted compatível com Tailscale)
+# via Docker e configura Nginx como reverse proxy com HTTPS via Let's Encrypt.
+#
+# SEGURANÇA:
+#   - Banco PostgreSQL dedicado (compartilha container postgres)
+#   - Porta exposta apenas em 127.0.0.1 — nunca direta na internet
+#   - ACL policy file controla quem fala com quem na tailnet
+#   - Pre-auth keys com TTL configurável (gerar via CLI)
+#
+# PRÉ-REQUISITOS:
+#   - Docker rodando (role: docker)
+#   - Rede Docker warpgate (role: docker_network)
+#   - PostgreSQL com banco headscale provisionado (postgres_databases)
+#   - Nginx instalado (role: nginx)
+#   - DNS: headscale_domain apontando para o IP da VPS
+#   - vault_headscale_db_password definido no vault Ansible
+#
+# PÓS-DEPLOY (manual, fora deste playbook):
+#   1. Criar user na tailnet:
+#      docker exec headscale headscale users create {{ headscale_user_name }}
+#   2. Gerar pre-auth key reusable:
+#      docker exec headscale headscale preauthkeys create \
+#        --user {{ headscale_user_name }} --reusable --expiration 90d --tags tag:vps
+#   3. Salvar a key no vault como vault_headscale_authkey_vps
+#   4. Aplicar role tailscale_client para conectar a VPS na tailnet
+
+# ----------------------------------------------------------------
+# Volumes e diretórios
+# ----------------------------------------------------------------
+
+- name: Garantir que o volume de dados existe
+  community.docker.docker_volume:
+    name: "{{ headscale_volume_name }}"
+    state: present
+
+- name: Criar diretório de configuração
+  file:
+    path: "{{ headscale_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ----------------------------------------------------------------
+# Configuração e ACL
+# ----------------------------------------------------------------
+
+- name: Renderizar config.yaml
+  template:
+    src: config.yaml.j2
+    dest: "{{ headscale_config_dir }}/config.yaml"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Reiniciar Headscale
+
+- name: Renderizar acl.json
+  template:
+    src: acl.json.j2
+    dest: "{{ headscale_config_dir }}/acl.json"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reiniciar Headscale
+
+# ----------------------------------------------------------------
+# Container
+# ----------------------------------------------------------------
+
+- name: Subir container Headscale
+  community.docker.docker_container:
+    name: "{{ headscale_container_name }}"
+    image: "{{ headscale_image }}"
+    pull: true
+    state: started
+    restart_policy: unless-stopped
+    command: ["serve"]
+    ports:
+      - "127.0.0.1:{{ headscale_port }}:8080"
+    volumes:
+      - "{{ headscale_volume_name }}:/var/lib/headscale"
+      - "{{ headscale_config_dir }}:/etc/headscale:ro"
+    networks:
+      - name: "{{ docker_network_name }}"
+    security_opts:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+- name: Aguardar Headscale responder
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ headscale_port }}"
+    delay: 5
+    timeout: 60
+    msg: "Headscale não respondeu na porta {{ headscale_port }} em 60s"
+
+# ----------------------------------------------------------------
+# Garantir user padrão da tailnet
+# ----------------------------------------------------------------
+
+- name: Verificar se o user {{ headscale_user_name }} existe
+  command: docker exec {{ headscale_container_name }} headscale users list -o json
+  register: headscale_users
+  changed_when: false
+
+- name: Criar user {{ headscale_user_name }} (idempotente)
+  command: docker exec {{ headscale_container_name }} headscale users create {{ headscale_user_name }}
+  when: headscale_user_name not in (headscale_users.stdout | from_json | map(attribute='name') | list)
+
+# ----------------------------------------------------------------
+# Nginx + SSL
+# ----------------------------------------------------------------
+
+- name: Instalar Certbot e plugin Nginx
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+
+- name: Criar virtual host Nginx para {{ headscale_domain }}
+  template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-available/headscale"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recarregar Nginx
+
+- name: Habilitar virtual host headscale
+  file:
+    src: "/etc/nginx/sites-available/headscale"
+    dest: "/etc/nginx/sites-enabled/headscale"
+    state: link
+  notify: Recarregar Nginx
+
+- name: Testar configuração do Nginx
+  command: nginx -t
+  changed_when: false
+
+- name: Recarregar Nginx antes de emitir certificado
+  meta: flush_handlers
+
+- name: Emitir/renovar certificado SSL via Certbot para {{ headscale_domain }}
+  command: >
+    certbot --nginx
+    -d {{ headscale_domain }}
+    --non-interactive
+    --agree-tos
+    -m {{ deploy_email }}
+    --redirect
+    --keep-until-expiring
+  changed_when: false
+
+# ----------------------------------------------------------------
+# Resumo
+# ----------------------------------------------------------------
+
+- name: Exibir resumo Headscale
+  debug:
+    msg:
+      - "============================================"
+      - "  Headscale provisionado!"
+      - "============================================"
+      - "  URL       : https://{{ headscale_domain }}"
+      - "  User      : {{ headscale_user_name }}"
+      - "============================================"
+      - "  Próximos passos manuais:"
+      - "  1. Gerar pre-auth key para a VPS:"
+      - "     docker exec {{ headscale_container_name }} headscale preauthkeys \\"
+      - "       create --user {{ headscale_user_name }} --reusable \\"
+      - "       --expiration 90d --tags tag:vps"
+      - "  2. Salvar a key no vault:"
+      - "     ansible-vault edit inventory/prod/group_vars/all/vault.yml"
+      - "       vault_headscale_authkey_vps: <key>"
+      - "  3. Aplicar tailscale_client:"
+      - "     ansible-playbook ... --tags tailscale"
+      - "============================================"
