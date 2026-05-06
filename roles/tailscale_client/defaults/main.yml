@@ -20,6 +20,13 @@ tailscale_authkey: "{{ vault_headscale_authkey_vps | default('') }}"
 # Aceitar rotas anunciadas por outros nós (servidores de aeródromo anunciam câmeras)
 tailscale_accept_routes: true
 
+# Anunciar este nó como exit node — outros peers podem rotear todo o tráfego de
+# internet por aqui. Default false. Habilitar APENAS para a VPS (host_vars).
+# Após ativar, lembre-se de aprovar a rota no Headscale:
+#   docker exec headscale headscale routes list
+#   docker exec headscale headscale routes enable --route <ID>
+tailscale_advertise_exit_node: false
+
 # DNS da tailnet — true habilita MagicDNS + extra_records do Headscale.
 # Necessário para que `vault.aerobi.com.br` (e outros domínios listados em
 # extra_records) resolvam pelo IP da tailnet quando o cliente está conectado,

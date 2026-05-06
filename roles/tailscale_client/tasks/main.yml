@@ -64,18 +64,20 @@
     --hostname={{ tailscale_hostname }}
     --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
     --accept-dns={{ 'true' if tailscale_accept_dns else 'false' }}
+    {{ '--advertise-exit-node' if tailscale_advertise_exit_node else '' }}
   when: not tailscale_already_connected
   no_log: true
   register: ts_up
   changed_when: ts_up.rc == 0
 
 # Para nós já conectados (skip do `tailscale up` acima), aplicar
-# accept-dns/accept-routes via `tailscale set` — não derruba a sessão.
+# settings via `tailscale set` — não derruba a sessão.
 - name: Aplicar settings dinâmicos no nó já conectado
   command: >
     tailscale set
     --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
     --accept-dns={{ 'true' if tailscale_accept_dns else 'false' }}
+    --advertise-exit-node={{ 'true' if tailscale_advertise_exit_node else 'false' }}
   when: tailscale_already_connected
   changed_when: false
 

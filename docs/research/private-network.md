@@ -69,6 +69,24 @@ Mesh dinâmica entre N aeródromos atrás de CGNAT exigiria operar relay STUN/TU
 
 Alternativa válida. Mas ecosistema menos maduro que Tailscale, especialmente clientes mobile e operação de longo prazo. Vale revisitar daqui 2–3 anos se algo no tooling Tailscale degradar.
 
+**Por quê NÃO OpenVPN (não estava na lista original):**
+
+OpenVPN é a opção "tradicional" e bem conhecida — fácil descartar como mais simples sem analisar o ciclo completo. Mas para o caso multi-site da Aerobi:
+
+| Aspecto | OpenVPN | Headscale (mesh) |
+|---|---|---|
+| Topologia | Cliente↔Servidor (hub-and-spoke). Tráfego passa pelo servidor central. | Mesh: nós conversam **direto** entre si (P2P), VPS só coordena handshake. |
+| NAT traversal (CGNAT) | Funciona, mas TCP-over-TCP é lento; UDP exige port forward. | Excelente nativamente (DERP relays como fallback). Crítico para aeródromos atrás do NAT do provedor local. |
+| Cadastrar novo cliente | Gerar certificado + arquivo `.ovpn` + distribuir por device. | `headscale preauthkeys create` → cola string no app. |
+| Mobile | Importa `.ovpn` por device, app menos polido. | App oficial Tailscale (mesmo binário do SaaS), UI moderna. |
+| Subnet routing (câmeras) | `push "route X"` no servidor + iptables. | `tailscale up --advertise-routes=192.168.X.0/24`. |
+| ACL (quem fala com quem) | Via firewall iptables. | JSON declarativo (`tag:vps → tag:airfield`). |
+| Revogar device | Adicionar cert ao CRL, distribuir CRL. | `headscale nodes expire --identifier X`. |
+
+A primeira impressão é "OpenVPN parece mais simples". Mas quando se considera o ciclo completo (manter PKI/CA, distribuir e revogar certs, gerenciar mesh manualmente entre N aeródromos atrás de CGNAT, configurar push routes para subnets de câmeras, mobile UX), o custo total de operação fica maior. E a topologia hub-and-spoke do OpenVPN obriga todo o tráfego backend↔aeródromo a passar pela VPS — gargalo de banda e latência dobrada que o Tailscale evita.
+
+Se o cenário fosse 1 servidor + 2-3 clientes que nunca cresce, OpenVPN seria razoável. Não é o caso.
+
 ## 6. Arquitetura proposta — Headscale na VPS Aerobi
 
 ### Componentes

@@ -539,7 +539,7 @@ Sim. Cada par de nós estabelece um túnel WireGuard com chaves derivadas no mom
 
 Seu ISP local continua enxergando seu tráfego de internet como antes. A VPS Aerobi não participa dele.
 
-**Exceção — Exit Node.** No app Tailscale aparece um campo "Exit Node" (default: `None`). Esse recurso permite rotear **todo** o tráfego de internet por outro nó da tailnet (útil em Wi-Fi público suspeito, p.ex.). **Hoje, no setup atual, nenhum nó está anunciando-se como exit node** — então a única opção visível na lista é `None`. Pra habilitar (caso queira usar a VPS como exit node), ver [Anunciar a VPS como exit node](#anunciar-a-vps-como-exit-node-opcional) abaixo.
+**Exceção — Exit Node.** No app Tailscale aparece um campo "Exit Node" (default: `None`). Esse recurso permite rotear **todo** o tráfego de internet por outro nó da tailnet (útil em Wi-Fi público suspeito, p.ex.). **A VPS Aerobi (`vps-prod`) está configurada como exit node disponível** — basta selecionar no app pra ativar. Ver [Como usar a VPS como exit node](#como-usar-a-vps-como-exit-node) abaixo.
 
 ### Os outros dispositivos da tailnet veem minha navegação?
 
@@ -567,28 +567,72 @@ O que **não** é preocupação:
 
 ---
 
-## Anunciar a VPS como exit node (opcional)
+## Como usar a VPS como exit node
 
-Hoje a opção `Choose exit node` no app só mostra `None` — nenhum nó está anunciando-se como saída de internet. Para usar a VPS como exit node (todo o tráfego de internet do seu celular sai pela VPS, útil em Wi-Fi público), seria preciso:
+A VPS Aerobi está configurada para anunciar-se como exit node (`tailscale_advertise_exit_node: true` em [`inventory/prod/host_vars/vps-prod.yml`](../inventory/prod/host_vars/vps-prod.yml)) e a rota `0.0.0.0/0` já está aprovada no Headscale. O recurso fica **disponível, mas inativo por padrão** — cada cliente escolhe se quer usar ou não.
 
-1. Reconectar a VPS com a flag `--advertise-exit-node`. Pode ser ajustando a role `tailscale_client` ou via comando manual:
+### Ativar no app mobile
+
+1. Abrir o app Tailscale no celular.
+2. Tocar em **Choose exit node** (no card "EXIT NODE" da tela principal).
+3. Selecionar **vps-prod**.
+
+Pronto — todo o tráfego web do celular passa a sair pela VPS. Pra desativar, voltar em **Choose exit node** e selecionar **None**.
+
+### Ativar no Linux/macOS (CLI)
+
+```bash
+# Listar exit nodes disponíveis
+tailscale exit-node list
+
+# Ativar
+sudo tailscale set --exit-node=vps-prod
+
+# Desativar (voltar ao modo split tunnel)
+sudo tailscale set --exit-node=
+```
+
+### Quando vale a pena usar
+
+- **Wi-Fi público / hotel / aeroporto / café**: tráfego sai criptografado pela tailnet até a VPS, evita sniffing local.
+- **Geo-bloqueio**: sites que checam IP brasileiro (a VPS está no Brasil — Hostinger).
+- **Contornar rede corporativa restritiva**: se o Wi-Fi local bloqueia certos sites, a VPS atua como saída.
+
+### Trade-offs (importante)
+
+- **Latência aumenta**: todo o tráfego dá uma volta pela VPS antes de sair pra internet. Streaming/jogos podem sentir.
+- **Banda da VPS é compartilhada**: se vários peers usarem como exit node ao mesmo tempo, divide a banda da Hostinger.
+- **Quem opera a VPS vê metadados do tráfego**: a Hostinger (provedor) e você (operador) conseguem ver DNS queries e IPs de destino. **Conteúdo HTTPS continua criptografado fim-a-fim** com os sites visitados — ninguém vê senhas/dados que você digitou em sites HTTPS.
+- **IP de origem muda**: requests web saem com o IP da VPS (`187.127.6.20`), não com seu IP residencial/móvel. Alguns sites (banco, captcha) podem questionar login de IP novo.
+
+Por isso é **opt-in** — só ative quando o cenário pedir.
+
+### Como foi configurado
+
+Caso precise mexer no futuro:
+
+1. **Anunciar como exit node** (já feito): em `inventory/prod/host_vars/vps-prod.yml`:
+   ```yaml
+   tailscale_advertise_exit_node: true
+   ```
+   A role `tailscale_client` aplica via `tailscale set --advertise-exit-node=true`.
+
+2. **Aprovar a rota no Headscale** (passo manual, único): a rota fica `Available` mas precisa de aprovação explícita do admin.
    ```bash
    ssh deploy@187.127.6.20
-   sudo tailscale set --advertise-exit-node
+   docker exec headscale headscale nodes list-routes
+   docker exec headscale headscale nodes approve-routes \
+     --identifier 1 --routes '0.0.0.0/0,::/0'
    ```
-2. Aprovar a rota no Headscale:
+   Após aprovado, fica permanente.
+
+3. **Para reverter** (caso queira desabilitar):
    ```bash
-   docker exec headscale headscale routes list
-   docker exec headscale headscale routes enable --route <ROUTE_ID>
+   # Remover aprovação da rota
+   docker exec headscale headscale nodes approve-routes --identifier 1 --routes ''
+   # E em host_vars/vps-prod.yml: tailscale_advertise_exit_node: false
+   # Re-aplicar: ansible-playbook ... --tags tailscale
    ```
-3. No app do celular, `Choose exit node` → `vps-prod` aparece pra selecionar.
-
-**Trade-off:** quando o exit node está ativo, **todo** o seu tráfego web passa pela VPS. Isso significa:
-- Quem opera a VPS (Hostinger + você) consegue ver o tráfego (DNS queries, IPs visitados — conteúdo HTTPS continua criptografado fim-a-fim com os destinos).
-- Latência pode aumentar (todo o tráfego dá uma volta pela VPS antes de sair).
-- O IP de origem dos seus requests web vira o IP da VPS.
-
-Por isso é uma feature **opt-in** e raramente vale a pena no dia a dia. Para nosso caso (acessar `vault.aerobi.com.br/admin` via tailnet), o split tunnel padrão já basta.
 
 ---
 

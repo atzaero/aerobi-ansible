@@ -1,0 +1,18 @@
+---
+# Variáveis específicas do host vps-prod (Aerobi production VPS).
+#
+# Use group_vars/all/all.yml para configurações compartilhadas entre hosts;
+# este arquivo é só para overrides que pertencem APENAS à VPS principal
+# (não a futuros servidores de aeródromo, p.ex.).
+
+# Tailscale: VPS atua como exit node opcional.
+# Quando habilitado, peers da tailnet podem selecionar `vps-prod` como
+# saída de internet ("Exit Node" no app mobile). Útil em Wi-Fi público
+# suspeito — todo o tráfego do device sai pela VPS.
+#
+# Após aplicar e o Tailscale anunciar a rota, é necessário UMA VEZ aprovar
+# manualmente no Headscale (a rota fica pending até admin aprovar):
+#   ssh deploy@187.127.6.20
+#   docker exec headscale headscale routes list
+#   docker exec headscale headscale routes enable --route <ID>
+tailscale_advertise_exit_node: true
