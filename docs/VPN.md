@@ -83,39 +83,64 @@ tailscale ip -4
 
 #### macOS
 
-App store oficial **NÃO** funciona com Headscale — usa o Mac App Store binding ao SaaS da Tailscale. Opções:
+App da Mac App Store está atrelado ao SaaS da Tailscale e não permite trocar de servidor. Duas opções:
 
-1. **Tailscale Open Source para macOS** (binário standalone): https://pkgs.tailscale.com/stable/#macos
-2. Conecta igual ao Linux:
+**Via CLI** (mais simples):
 
 ```bash
-sudo tailscale up --login-server=https://headscale.aerobi.com.br --authkey=...
+# Instalar (Homebrew)
+brew install tailscale
+
+# Conectar
+sudo tailscale login --login-server=https://headscale.aerobi.com.br
+# (abre o navegador; cole a pre-auth key na tela do Headscale)
+
+# Ou direto com a key:
+sudo tailscale up --login-server=https://headscale.aerobi.com.br --authkey=hskey-auth-...
 ```
+
+**Via GUI** (binário oficial standalone):
+
+1. Baixar de https://pkgs.tailscale.com/stable/#macos (NÃO da Mac App Store)
+2. Instalar e abrir
+3. Segurar **⌥ Option** e clicar no ícone do Tailscale no menu bar → menu **Debug**
+4. **Add Account...** dentro de **Custom Login Server**
+5. URL: `https://headscale.aerobi.com.br`
+6. Seguir o login no navegador (cola a pre-auth key)
 
 #### Android
 
-1. Instalar **Tailscale** da Play Store (app oficial).
-2. Abrir o app — primeira tela pede sign in. **Não fazer sign in ainda.**
-3. Tocar 3 vezes seguidas no logo do Tailscale (canto superior) para abrir o menu oculto de configuração avançada.
-4. Em **Coordination server URL**, colocar `https://headscale.aerobi.com.br`.
-5. Voltar e fazer sign in — vai abrir o navegador apontando pro Headscale com instruções.
-6. Alternativamente, usar pre-auth key direta: abrir URL no celular:
-   ```
-   https://headscale.aerobi.com.br/register/<machine-key>
-   ```
-   (esse fluxo aparece quando o app falha a primeira vez — copia o link, abre no navegador, autoriza com a pre-auth key)
+Interface do app Tailscale Android (versão atual, doc oficial Headscale):
 
-A doc oficial do Headscale tem o passo a passo atualizado: https://headscale.net/stable/usage/connect/android/
+1. Instalar **Tailscale** da Play Store.
+2. Abrir o app → ícone de **configurações** no canto superior direito.
+3. Tocar em **Accounts**.
+4. Ícone de **três pontos** (⋮) → **Use an alternate server**.
+5. URL: `https://headscale.aerobi.com.br` → confirmar.
+6. Se a tela de login web aparecer, fechar.
+7. Voltar para **Accounts**.
+8. Ícone de **três pontos** (⋮) novamente → **Use an auth key**.
+9. Colar a pre-auth key (formato `hskey-auth-...`) → confirmar.
+10. Tocar **Log in** na tela principal se necessário.
+
+Pronto — o app passa a mostrar o IP da tailnet (`100.64.x.y`) e a lista de outros nós.
+
+Doc oficial atualizada: https://headscale.net/stable/usage/connect/android/
 
 #### iOS / iPadOS
 
-1. Instalar **Tailscale** da App Store.
-2. Abrir as **Configurações do iOS** (não do app), procurar Tailscale na lista de apps.
-3. Em **Alternate Coordination Server URL**, colocar `https://headscale.aerobi.com.br`.
-4. Voltar pro app Tailscale, sign in — vai abrir Safari pro Headscale.
-5. Quando o navegador pedir, autorizar com a pre-auth key gerada.
+Interface do app Tailscale iOS (versão atual, doc oficial Headscale):
 
-Doc oficial: https://headscale.net/stable/usage/connect/apple/
+1. Instalar **Tailscale** da App Store.
+2. Abrir o app → ícone de **conta** no canto superior direito.
+3. Tocar em **Log in…**.
+4. Menu **⋯** (canto superior direito) → **Use custom coordination server**.
+5. URL: `https://headscale.aerobi.com.br` → confirmar.
+6. Seguir o login (Safari abre apontando pro Headscale; cole a pre-auth key na tela).
+
+Pronto.
+
+Doc oficial atualizada: https://headscale.net/stable/usage/connect/apple/
 
 ### Passo 3 — Validar
 
