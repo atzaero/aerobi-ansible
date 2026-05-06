@@ -527,6 +527,44 @@ Sim. Cada par de nós estabelece um túnel WireGuard com chaves derivadas no mom
 
 **Não.** Por padrão é peer-to-peer direto entre os nós. Quando o NAT impede conexão direta (carrier-grade NAT em rede móvel, p.ex.), o tráfego cai num **DERP relay** público da Tailscale como fallback — mas continua criptografado fim-a-fim, o relay só vê pacotes opacos. Veja `tailscale ping <peer>` para descobrir qual caminho está em uso (`direct` vs `via DERP <região>`).
 
+### Estando conectado à tailnet, minha navegação na internet passa pela VPS?
+
+**Não, por padrão.** O Tailscale opera em modo **split tunnel**:
+
+| Tráfego | Caminho |
+|---|---|
+| google.com, YouTube, WhatsApp, banco, navegação geral | Sai pela rede normal (4G/Wi-Fi do ISP); a VPS não vê |
+| IPs do range `100.64.0.0/10` | Tailnet (P2P direto entre peers) |
+| Domínios em `extra_records` do Headscale (hoje `vault.aerobi.com.br`) | Tailnet (resolvem pra IP `100.64.x.y`) |
+
+Seu ISP local continua enxergando seu tráfego de internet como antes. A VPS Aerobi não participa dele.
+
+**Exceção — Exit Node.** No app Tailscale aparece um campo "Exit Node" (default: `None`). Se você selecionar `vps-prod` ali, **todo** o tráfego de internet passa a sair pela VPS — útil em Wi-Fi público não confiável, mas significa que quem opera a VPS (a Hostinger e você) vê todo o tráfego. Sem essa seleção explícita, fica em split tunnel.
+
+### Os outros dispositivos da tailnet veem minha navegação?
+
+**Não.** Cada par de nós tem seu próprio túnel WireGuard criptografado. Outros peers veem só:
+
+- Seu hostname (`android-elvis`) e IP da tailnet (`100.64.0.3`)
+- Status online/offline
+- Sistema operacional reportado pelo cliente
+- Última vez visto (timestamp)
+- Seu IP público durante o handshake inicial (usado pra estabelecer conexão direta; não fica armazenado depois)
+
+**Não veem:** sites visitados, conteúdo de tráfego, apps em uso, localização GPS, dados pessoais. Mesmo o Headscale (control plane) só vê metadados de coordenação — nunca o conteúdo do tráfego entre peers.
+
+### Quais preocupações de privacidade são reais aqui?
+
+- **Pre-auth keys são credenciais.** Quem tiver a string `hskey-auth-...` reusable pode entrar na tailnet como `tag:dev` (acesso a tudo) até a key expirar. Se suspeitar de vazamento: `docker exec headscale headscale preauthkeys expire <key>` revoga, e gere uma nova.
+- **Visibilidade dentro da `tag:dev`.** Hoje todos os admins estão no mesmo user (`aerobi`) e veem online/offline uns dos outros. Pra isolar, criar users separados ou ACLs mais finas — não é prioridade no setup atual.
+- **Hostname revela informação.** Padrão `android-elvis` / `iphone-maria` revela quem é. Se preferir anonimizar, renomear via `headscale nodes rename` para algo neutro tipo `dev-3`.
+
+O que **não** é preocupação:
+
+- Navegação web do dia a dia continua privada como antes da VPN.
+- A VPS não "espiona" tráfego entre peers — o WireGuard usa forward secrecy.
+- Mesmo aparecendo na lista de peers, outros nós só conseguem te conectar se a ACL permitir.
+
 ---
 
 ## Troubleshooting
