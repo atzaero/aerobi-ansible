@@ -501,6 +501,34 @@ Pra novas keys de admin/aeródromo, ver [Métodos de autenticação](#métodos-d
 
 ---
 
+## Perguntas frequentes
+
+### Por que o app mostra todos os dispositivos da tailnet?
+
+Tailscale é uma **mesh VPN**: nós conversam direto entre si (peer-to-peer) sem passar pela VPS como gateway. Pra isso funcionar, cada nó precisa saber quais peers existem, qual a chave pública WireGuard de cada e qual o IP da tailnet correspondente. O Headscale (control plane) distribui essa lista para todos os nós conectados.
+
+**Visibilidade não é acesso.** A lista mostra quem existe na rede, mas quem pode conversar com quem é decidido pela ACL ([`acl.json.j2`](../roles/headscale/templates/acl.json.j2)). Hoje:
+
+- `tag:dev` (laptop/celular admin) → conversa com tudo
+- `tag:vps` (a VPS) → conversa só com `tag:airfield`
+- `tag:airfield` (aeródromos, futuro) → recebe da VPS, não conversa entre si nem com `tag:vps`
+
+Se um aeródromo for cadastrado amanhã, ele aparece na lista de todos os clientes — mas tentar `tailscale ping airfield-1` de outro aeródromo vai falhar porque a ACL nega.
+
+### Posso esconder os outros dispositivos na lista?
+
+Não trivialmente — a lista é parte do funcionamento do protocolo. Use ACLs para controlar **acesso**, não visibilidade.
+
+### Tailscale criptografa o tráfego?
+
+Sim. Cada par de nós estabelece um túnel WireGuard com chaves derivadas no momento da conexão. Nem o Headscale (control plane) consegue ler o tráfego — só coordena handshakes. Mesmo se a VPS for comprometida, o tráfego histórico entre nós permanece confidencial (forward secrecy).
+
+### Tudo passa pela VPS?
+
+**Não.** Por padrão é peer-to-peer direto entre os nós. Quando o NAT impede conexão direta (carrier-grade NAT em rede móvel, p.ex.), o tráfego cai num **DERP relay** público da Tailscale como fallback — mas continua criptografado fim-a-fim, o relay só vê pacotes opacos. Veja `tailscale ping <peer>` para descobrir qual caminho está em uso (`direct` vs `via DERP <região>`).
+
+---
+
 ## Troubleshooting
 
 ### `tailscale up` falha com "no nodes found"
