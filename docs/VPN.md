@@ -191,6 +191,24 @@ docker exec headscale headscale nodes list
 docker exec headscale headscale users list
 ```
 
+### Renomear um node
+
+O app Tailscale Android, quando autenticado por pre-auth key, frequentemente atribui um hostname placeholder do tipo `invalid-b2hd95oi`. Pode acontecer com outros clientes também. Para renomear:
+
+```bash
+ssh deploy@187.127.6.20
+
+# Pegar o ID do node
+docker exec headscale headscale nodes list
+
+# Renomear (ID 3 → android-elvis)
+docker exec headscale headscale nodes rename --identifier 3 android-elvis
+```
+
+O cliente vai refletir o novo nome na próxima sincronização (poucos segundos). Não derruba a conexão.
+
+Convenção sugerida: `<plataforma>-<dono>` (ex: `android-elvis`, `iphone-maria`, `laptop-joao`).
+
 ### Revogar um device
 
 ```bash
