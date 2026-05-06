@@ -87,8 +87,11 @@
       - name: "{{ docker_network_name }}"
     security_opts:
       - "no-new-privileges:true"
+    # A imagem oficial é distroless — não tem wget/curl/sh. O subcomando
+    # `headscale health` é o check nativo recomendado: ele bate em /health
+    # via socket interno e retorna 0/1.
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "headscale", "health"]
       interval: 30s
       timeout: 10s
       retries: 3
