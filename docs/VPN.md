@@ -539,7 +539,7 @@ Sim. Cada par de nós estabelece um túnel WireGuard com chaves derivadas no mom
 
 Seu ISP local continua enxergando seu tráfego de internet como antes. A VPS Aerobi não participa dele.
 
-**Exceção — Exit Node.** No app Tailscale aparece um campo "Exit Node" (default: `None`). Se você selecionar `vps-prod` ali, **todo** o tráfego de internet passa a sair pela VPS — útil em Wi-Fi público não confiável, mas significa que quem opera a VPS (a Hostinger e você) vê todo o tráfego. Sem essa seleção explícita, fica em split tunnel.
+**Exceção — Exit Node.** No app Tailscale aparece um campo "Exit Node" (default: `None`). Esse recurso permite rotear **todo** o tráfego de internet por outro nó da tailnet (útil em Wi-Fi público suspeito, p.ex.). **Hoje, no setup atual, nenhum nó está anunciando-se como exit node** — então a única opção visível na lista é `None`. Pra habilitar (caso queira usar a VPS como exit node), ver [Anunciar a VPS como exit node](#anunciar-a-vps-como-exit-node-opcional) abaixo.
 
 ### Os outros dispositivos da tailnet veem minha navegação?
 
@@ -564,6 +564,56 @@ O que **não** é preocupação:
 - Navegação web do dia a dia continua privada como antes da VPN.
 - A VPS não "espiona" tráfego entre peers — o WireGuard usa forward secrecy.
 - Mesmo aparecendo na lista de peers, outros nós só conseguem te conectar se a ACL permitir.
+
+---
+
+## Anunciar a VPS como exit node (opcional)
+
+Hoje a opção `Choose exit node` no app só mostra `None` — nenhum nó está anunciando-se como saída de internet. Para usar a VPS como exit node (todo o tráfego de internet do seu celular sai pela VPS, útil em Wi-Fi público), seria preciso:
+
+1. Reconectar a VPS com a flag `--advertise-exit-node`. Pode ser ajustando a role `tailscale_client` ou via comando manual:
+   ```bash
+   ssh deploy@187.127.6.20
+   sudo tailscale set --advertise-exit-node
+   ```
+2. Aprovar a rota no Headscale:
+   ```bash
+   docker exec headscale headscale routes list
+   docker exec headscale headscale routes enable --route <ROUTE_ID>
+   ```
+3. No app do celular, `Choose exit node` → `vps-prod` aparece pra selecionar.
+
+**Trade-off:** quando o exit node está ativo, **todo** o seu tráfego web passa pela VPS. Isso significa:
+- Quem opera a VPS (Hostinger + você) consegue ver o tráfego (DNS queries, IPs visitados — conteúdo HTTPS continua criptografado fim-a-fim com os destinos).
+- Latência pode aumentar (todo o tráfego dá uma volta pela VPS antes de sair).
+- O IP de origem dos seus requests web vira o IP da VPS.
+
+Por isso é uma feature **opt-in** e raramente vale a pena no dia a dia. Para nosso caso (acessar `vault.aerobi.com.br/admin` via tailnet), o split tunnel padrão já basta.
+
+---
+
+## "Run as exit node" e "Allow LAN access" no app mobile — para que servem?
+
+Telas que aparecem dentro de **Choose exit node** no app Tailscale Android/iOS:
+
+### Run as exit node
+
+Oferece o **próprio celular** como saída de internet para outros peers da tailnet — o oposto de usar a VPS como exit node. **Não ative.** Os trade-offs do app são bem realistas:
+
+- Gasta bateria significativamente (rádio em uso constante).
+- Dados móveis de outros peers passam pela sua linha (custo, plano).
+- Expõe sua conexão pessoal a uso por outros nós.
+
+Faz sentido apenas em cenários muito específicos (ex: quer compartilhar internet do celular com um servidor remoto para algum teste). Não é o caso aqui.
+
+### Allow LAN access
+
+Controla se, **estando conectado à tailnet**, o cliente Tailscale ainda consegue acessar dispositivos da sua rede local (Chromecast, impressora Wi-Fi de casa, NAS, roteador). Default: **off**.
+
+- Off (recomendado): mais seguro, evita que peers da tailnet acidentalmente acessem sua rede local através do seu device.
+- On: útil se você precisa imprimir/usar dispositivos locais enquanto está conectado à tailnet.
+
+Para o nosso uso típico (acessar `/admin` da VPS, futuros aeródromos), **deixe Off**.
 
 ---
 
