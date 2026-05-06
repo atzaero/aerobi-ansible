@@ -1,0 +1,5 @@
+---
+- name: Reiniciar tailscaled
+  service:
+    name: tailscaled
+    state: restarted

@@ -1,0 +1,28 @@
+---
+# Defaults: headscale
+#
+# Control plane self-hosted compatível com clientes Tailscale.
+# Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
+
+headscale_container_name: headscale
+headscale_image: "headscale/headscale:0.28.0"
+
+# Porta interna do Headscale — exposta apenas em localhost,
+# acesso externo via Nginx reverse proxy
+headscale_port: 8080
+
+# Domínio público — DNS deve apontar para o IP da VPS antes de aplicar
+headscale_domain: "headscale.aerobi.com.br"
+
+# Banco de dados PostgreSQL — reusa container postgres existente
+headscale_db: headscale
+headscale_db_user: headscale_user
+
+# Volume para estado persistente (chaves privadas, etc)
+headscale_volume_name: headscale_data
+
+# Diretório de configuração no host
+headscale_config_dir: /etc/headscale
+
+# Pasta de pre-auth keys e configs persistentes
+headscale_user_name: aerobi
