@@ -36,31 +36,131 @@ A política ACL fica em [`roles/headscale/templates/acl.json.j2`](../roles/heads
 | `tag:airfield` | Servidores locais em aeródromos | (recebe conexões; não inicia) |
 | `tag:dev` | Laptops e celulares de admin | `*` (tudo) |
 
-Cada dispositivo nasce com uma tag, atribuída pela pre-auth key usada na conexão.
+**Importante:** a **tag não é só rótulo organizacional** — é a **identidade ACL** do device. Quando um device entra na tailnet, ele herda a tag da pre-auth key usada e fica permanentemente marcado com ela. As regras ACL acima decidem o tráfego permitido a partir dessa tag.
+
+Por isso, escolher a tag certa na hora de gerar a key é crítico: um servidor de aeródromo provisionado com `tag:dev` por engano teria acesso admin a toda a tailnet.
+
+---
+
+## Métodos de autenticação
+
+Existem três formas de adicionar um device à tailnet. A escolha depende do contexto (quem é o cliente, qual o nível de risco, automatizado ou manual).
+
+| Método | Quando usar | Distribuição da credencial | Esforço |
+|---|---|---|---|
+| **A. Pre-auth key reusable** | Time pequeno (admins atuais), múltiplos devices da mesma pessoa, fluxo conveniente | Compartilhar a key uma vez, válida até expirar | Baixo |
+| **B. Pre-auth key single-use** | Servidores de aeródromo, provisionamento automatizado, segurança maior | Uma key por device, consumida na primeira conexão | Médio |
+| **C. Registro manual (machine key)** | Cliente externo sem credencial pré-distribuída, cenários sensíveis | Admin registra a machine key do device pelo CLI | Alto, mas mais auditável |
+
+Em todos os métodos, a tag (`tag:dev`, `tag:airfield`, etc.) é atribuída — seja ao gerar a key (A, B) ou ao registrar a machine key (C).
+
+### Método A — Pre-auth key reusable
+
+**Quando usar:** time pequeno cadastrando vários devices (laptop + celular + tablet do mesmo admin). Reduz fricção operacional.
+
+**Como funciona:** você gera uma key uma vez e ela autentica vários devices até expirar. É a forma usada hoje pro `tag:dev`.
+
+**Como gerar:**
+
+```bash
+ssh deploy@187.127.6.20
+docker exec headscale headscale preauthkeys create \
+  --user 1 --reusable --expiration 90d --tags tag:dev
+# Output: hskey-auth-...
+```
+
+**Como o cliente usa:** cola a string `hskey-auth-...` no campo "auth key" do cliente Tailscale (Linux/macOS via `--authkey=...`, Android/iOS via menu **Use an auth key**). Ver [Como conectar](#passo-1--instalar-o-cliente-tailscale-e-conectar) abaixo.
+
+**Riscos:**
+- Se a key vazar (chat, e-mail), qualquer um pode entrar na tailnet com a tag até expirar.
+- Sem auditoria de "qual key autenticou cada device" — todos compartilham a mesma origem.
+
+**Boas práticas:**
+- Rodar em chats efêmeros (Signal disappearing messages, vault interno) ou via Vaultwarden Send.
+- Rotacionar (gerar nova + revogar velha) se suspeitar de vazamento ou alguém sair do time.
+- Re-gerar a cada 90 dias quando expirar.
+
+### Método B — Pre-auth key single-use
+
+**Quando usar:** servidor de aeródromo (provisionado via Ansible que consome a key automaticamente), cenários onde cada device deve ter sua própria credencial.
+
+**Como funciona:** sem `--reusable`, a key é descartada na primeira conexão bem-sucedida.
+
+**Como gerar:**
+
+```bash
+ssh deploy@187.127.6.20
+docker exec headscale headscale preauthkeys create \
+  --user 1 --expiration 90d --tags tag:airfield
+# Output: hskey-auth-... (válida por 90 dias OU até ser consumida — o que vier primeiro)
+```
+
+**Como o cliente usa:** mesma forma do Método A — cola a key e conecta. Diferença é que a key vira inválida depois.
+
+**Boas práticas:**
+- Gerar a key e consumir no mesmo provisionamento (Ansible role `tailscale_client` no servidor de aeródromo).
+- Não armazenar a key depois de usada — não tem mais valor.
+
+### Método C — Registro manual (sem pre-auth key)
+
+**Quando usar:** quando você não quer (ou não pode) distribuir uma credencial pré-autorizada antes do device tentar conectar. Útil pra clientes externos eventuais ou auditoria.
+
+**Como funciona:** o cliente tenta logar no Headscale sem auth key. O Headscale gera uma **machine key** e mostra uma tela "Machine Registration" com um comando que o admin precisa executar pra autorizar o device.
+
+**Fluxo do lado do cliente:**
+
+1. Configurar o cliente Tailscale apontando pra `https://headscale.aerobi.com.br` (ver [Conectando](#passo-1--instalar-o-cliente-tailscale-e-conectar) abaixo) — sem fornecer auth key.
+2. O app abre uma URL/tela do Headscale com texto tipo:
+   ```
+   Machine Registration
+   Run the command below in the headscale server:
+   headscale nodes register --user <USER> --key mkey:abc123...
+   ```
+3. Cliente envia esse `mkey:...` para o admin (chat, e-mail).
+
+**Fluxo do lado do admin (na VPS):**
+
+```bash
+ssh deploy@187.127.6.20
+
+# Registrar atribuindo a tag certa
+docker exec headscale headscale nodes register \
+  --user 1 \
+  --key mkey:abc123... \
+  --tags tag:dev
+```
+
+**Vantagens:**
+- Nenhuma credencial pré-distribuída — admin valida cada cadastro caso a caso.
+- Auditoria fica clara: cada device tem uma machine key única e foi registrado por um admin específico (nos logs do Headscale).
+
+**Desvantagens:**
+- Admin precisa ser interativo: cliente espera o registro acontecer.
+- Mais fricção pra cadastros em massa.
+
+### Resumo de decisão
+
+```
+Vai cadastrar 1 ou 2 devices manualmente, com você por perto?
+  → Método A (reusable, conveniente)
+
+É um servidor de aeródromo provisionado por Ansible?
+  → Método B (single-use, integrado ao provisioning)
+
+Cliente externo eventual / auditoria importa?
+  → Método C (registro manual)
+```
 
 ---
 
 ## Adicionar um dispositivo à tailnet
 
-### Passo 1 — Gerar uma pre-auth key
+### Passo 1 — Obter credencial
 
-Conecte na VPS e gere uma key com a tag certa pra esse dispositivo:
+Escolha o método em [Métodos de autenticação](#métodos-de-autenticação) acima e gere/prepare a credencial:
 
-```bash
-ssh deploy@187.127.6.20
-
-# Para um laptop/celular dev/admin:
-docker exec headscale headscale preauthkeys create \
-  --user 1 --reusable --expiration 90d --tags tag:dev
-
-# Para um servidor de aeródromo (futuro):
-docker exec headscale headscale preauthkeys create \
-  --user 1 --expiration 90d --tags tag:airfield
-```
-
-A key tem o formato `hskey-auth-...`. Guarde-a — você cola no cliente Tailscale.
-
-**`--reusable`**: a mesma key pode autenticar múltiplos dispositivos (use para `tag:dev` se vai cadastrar vários celulares com a mesma key). Sem `--reusable`, a key é one-time-use (recomendado para servidor de aeródromo).
+- Método A ou B: gere a pre-auth key e copie a string `hskey-auth-...`.
+- Método C: configure o cliente primeiro (passo 2 abaixo), pegue a `mkey:...` que aparecer e registre.
 
 ### Passo 2 — Instalar o cliente Tailscale e conectar
 
@@ -141,6 +241,28 @@ Interface do app Tailscale iOS (versão atual, doc oficial Headscale):
 Pronto.
 
 Doc oficial atualizada: https://headscale.net/stable/usage/connect/apple/
+
+#### Sem pre-auth key (Método C — registro manual)
+
+Em qualquer plataforma acima, se você **pular a etapa de fornecer auth key** (não passar `--authkey=...` no Linux/macOS, ou não tocar **Use an auth key** no Android/iOS), o cliente Tailscale vai pedir login web e te direcionar pra uma tela do Headscale tipo:
+
+```
+Machine Registration
+Run the command below in the headscale server to add this machine to your network:
+headscale nodes register --user 1 --key mkey:c90c7456a90428fb2a9c6c05e8e5b2a188...
+```
+
+Copie a `mkey:...` exibida e envie ao admin. O admin, na VPS, executa:
+
+```bash
+ssh deploy@187.127.6.20
+docker exec headscale headscale nodes register \
+  --user 1 \
+  --key mkey:c90c7456a90428fb2a9c6c05e8e5b2a188... \
+  --tags tag:dev
+```
+
+Em poucos segundos o cliente conecta automaticamente — a tela de "Machine Registration" some sozinha.
 
 ### Passo 3 — Validar
 
