@@ -20,5 +20,8 @@ tailscale_authkey: "{{ vault_headscale_authkey_vps | default('') }}"
 # Aceitar rotas anunciadas por outros nós (servidores de aeródromo anunciam câmeras)
 tailscale_accept_routes: true
 
-# DNS da tailnet — opcional. true habilita MagicDNS.
-tailscale_accept_dns: false
+# DNS da tailnet — true habilita MagicDNS + extra_records do Headscale.
+# Necessário para que `vault.aerobi.com.br` (e outros domínios listados em
+# extra_records) resolvam pelo IP da tailnet quando o cliente está conectado,
+# fazendo com que o request passe pela tailnet0 e o Nginx aceite no `/admin`.
+tailscale_accept_dns: true

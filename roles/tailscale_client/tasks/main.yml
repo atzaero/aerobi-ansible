@@ -69,6 +69,16 @@
   register: ts_up
   changed_when: ts_up.rc == 0
 
+# Para nós já conectados (skip do `tailscale up` acima), aplicar
+# accept-dns/accept-routes via `tailscale set` — não derruba a sessão.
+- name: Aplicar settings dinâmicos no nó já conectado
+  command: >
+    tailscale set
+    --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
+    --accept-dns={{ 'true' if tailscale_accept_dns else 'false' }}
+  when: tailscale_already_connected
+  changed_when: false
+
 - name: Obter IP Tailscale do nó
   command: tailscale ip -4
   register: ts_ip
