@@ -54,48 +54,55 @@ make smoketest
 make ssh
 # → Você vira deploy@raspi-sim
 
-# 4. Rodar o playbook setup_aerodrome.yml — DOIS MODOS:
-
-#   Modo A) Agentless / push (padrão produção): roda DO LAPTOP via SSH
+# 4. Rodar o playbook DO LAPTOP — modo padrão produção
 make playbook
-# → ansible-playbook do host conecta via SSH no raspi-sim e instala
-#   aerodrome_edge (sem tailscale no lab) + mediamtx + 4 paths das câmeras
-
-#   Modo B) Pull / -c local (didático): roda DE DENTRO do raspi-sim
-make playbook-local
-# → docker exec entra no container e roda ansible-playbook lá dentro,
-#   contra localhost (-c local). Mesmo resultado final, jeito diferente.
+# → ansible-playbook na sua máquina conecta via SSH no raspi-sim e instala
+#   aerodrome_edge (sem tailscale no lab) + mediamtx + 4 paths das câmeras.
+#   O raspi-sim NÃO precisa ter ansible instalado nem ter o repo clonado.
 
 # 5. Validar fan-out das câmeras (do raspi-sim para as fake-cameras)
 make camera-test
 
-# 6. Derrubar tudo
+# 6. (Opcional) Entrar no raspi-sim pra inspecionar o que o ansible fez
+make ssh
+# → ssh deploy@raspi-sim. Useful pra ver mediamtx rodando, abrir logs, etc.
+
+# 7. Derrubar tudo
 make down
 
-# Reset total (apaga chaves SSH também):
+# Reset total (apaga chaves SSH e estado do raspi-sim):
 make clean
 ```
 
-### Os dois modos do Ansible — quando usar cada
+### Como o Ansible opera (agentless / push)
 
 ```
-Modo A (push)                     Modo B (pull)
-┌────────────┐                    ┌──────────────┐
-│  Laptop    │                    │  raspi-sim   │
-│            │  ─SSH─►            │              │
-│ ansible-   │      [raspi-sim]   │  ansible-    │
-│  playbook  │                    │   playbook   │
-│            │                    │   -c local   │
-└────────────┘                    └──────────────┘
-make playbook                     make playbook-local
+Sua máquina (host)             Container raspi-sim
+┌─────────────────────┐        ┌────────────────────────┐
+│  aerobi-ansible/    │        │  Ubuntu 24.04          │
+│  ├── playbooks/     │        │  + sshd                │
+│  ├── roles/         │ ─SSH─► │  (nada além disso até  │
+│  └── inventory/     │        │   o ansible chegar)    │
+│                     │        │                        │
+│  ansible-playbook   │        └────────────────────────┘
+└─────────────────────┘                  ▲
+                                         │
+                          tasks executam aqui dentro
+                          (apt install, copy, systemd, ...)
 ```
 
-| Modo | Quando usar |
-|---|---|
-| **A — push (`make playbook`)** | Padrão produção. Operador roda do laptop, atinge N raspis em paralelo, atualizações centralizadas, Raspi não precisa ter ansible instalado. |
-| **B — pull (`make playbook-local`)** | Bootstrap inicial via cloud-init/ansible-pull, treinamento de operador novo, demo didática. Operador entra no Raspi e roda ansible lá. |
+O `ansible-playbook` roda **na sua máquina**. Ele conecta via SSH no raspi-sim (porta 2222) e usa o protocolo Ansible pra executar tasks remotamente — copiando módulos Python temporários e rodando-os com `sudo`. **No raspi-sim não fica nada do repo aerobi-ansible**, só o resultado das tasks (mediamtx instalado, systemd unit configurada, etc.).
 
-Os dois rodam **as mesmas roles** e produzem **o mesmo estado final** — só muda quem invoca o `ansible-playbook`. Em produção, recomendamos modo A.
+É exatamente o mesmo fluxo que vai acontecer com o Raspi real do aeródromo:
+
+```
+Sua máquina                      Raspi físico no aeródromo
+┌─────────────────────┐          ┌───────────────────────┐
+│  aerobi-ansible/    │ ─SSH───► │  Ubuntu Server ARM64  │
+│  ansible-playbook   │  via     │  + sshd               │
+│                     │ tailnet  │  (nada além disso)    │
+└─────────────────────┘          └───────────────────────┘
+```
 
 ---
 

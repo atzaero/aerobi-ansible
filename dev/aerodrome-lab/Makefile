@@ -1,4 +1,4 @@
-.PHONY: keys up down ssh smoketest playbook playbook-local camera-test logs status clean help
+.PHONY: keys up down ssh smoketest playbook camera-test logs status clean help
 
 SSH_KEY := ssh/id_ed25519
 LAB_DIR := $(shell pwd)
@@ -7,19 +7,15 @@ ANSIBLE_DIR := $(shell cd ../.. && pwd)
 help:
 	@echo "Aerobi aerodrome-lab — alvos disponíveis:"
 	@echo ""
-	@echo "  make up              Sobe lab (raspi-sim + 4 fake-cameras)"
-	@echo "  make down            Derruba lab (preserva volumes)"
-	@echo "  make ssh             Conecta no raspi-sim via SSH"
-	@echo "  make smoketest       Valida que ansible alcança o raspi-sim (ping)"
-	@echo ""
-	@echo "  Dois modos de rodar o playbook:"
-	@echo "  make playbook        DO LAPTOP via SSH (modo agentless / push) — padrão produção"
-	@echo "  make playbook-local  DE DENTRO do raspi-sim (modo pull / -c local) — didático"
-	@echo ""
-	@echo "  make camera-test     Verifica do raspi-sim que cada câmera fake serve RTSP"
-	@echo "  make logs            Tail dos logs de todos os containers"
-	@echo "  make status          Status dos containers"
-	@echo "  make clean           Derruba tudo e apaga chaves SSH (reset total)"
+	@echo "  make up           Sobe lab (raspi-sim + 4 fake-cameras)"
+	@echo "  make down         Derruba lab (preserva volumes)"
+	@echo "  make ssh          Conecta no raspi-sim via SSH (debugar / inspecionar)"
+	@echo "  make smoketest    Valida que ansible alcança o raspi-sim (ping)"
+	@echo "  make playbook     Roda setup_aerodrome.yml (DO LAPTOP via SSH — modo real)"
+	@echo "  make camera-test  Verifica do raspi-sim que cada câmera fake serve RTSP"
+	@echo "  make logs         Tail dos logs de todos os containers"
+	@echo "  make status       Status dos containers"
+	@echo "  make clean        Derruba tudo e apaga chaves SSH (reset total)"
 	@echo ""
 
 keys:
@@ -63,19 +59,6 @@ playbook:
 	    -i inventory/dev-aerodrome \
 	    playbooks/setup_aerodrome.yml \
 	    --skip-tags tailscale
-
-playbook-local:
-	@echo "Rodando ansible-playbook DE DENTRO do raspi-sim (modo pull)..."
-	@echo "(repo do aerobi-ansible está montado em /repo no container)"
-	@docker compose exec raspi-sim bash -c '\
-		mkdir -p /root/.ansible-vault && \
-		echo "lab-dummy-password-no-vault-used" > /root/.ansible-vault/aerobi-prod && \
-		cd /repo && \
-		ansible-playbook \
-		    -i inventory/local-aerodrome \
-		    playbooks/setup_aerodrome.yml \
-		    --skip-tags tailscale \
-	'
 
 camera-test:
 	@echo "Validando que o raspi-sim alcança as 4 câmeras fake (TCP + ICMP)..."
