@@ -1,0 +1,26 @@
+{{ ansible_managed | comment(decoration='# ') }}
+
+[Unit]
+Description=Aerobi mediamtx (RTSP -> HLS fan-out)
+Documentation=https://github.com/bluenviron/mediamtx
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mediamtx
+Group=mediamtx
+ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges={{ 'yes' if mediamtx_systemd_no_new_privileges else 'no' }}
+ProtectSystem={{ mediamtx_systemd_protect_system }}
+ProtectHome={{ 'yes' if mediamtx_systemd_protect_home else 'no' }}
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

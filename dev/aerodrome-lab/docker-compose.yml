@@ -1,0 +1,91 @@
+---
+# Laboratório local que simula um aeródromo edge:
+# - 1 container "raspi-sim" rodando Ubuntu 24.04 com SSH (alvo do Ansible)
+# - 4 containers "cam-1..cam-4" rodando mediamtx + ffmpeg testsrc (câmeras fake)
+# - Rede bridge 192.168.68.0/24 com IPs fixos (replica a LAN do aeródromo MVP)
+#
+# Uso:
+#   make up         — sobe tudo
+#   make ssh        — entra no raspi-sim
+#   make playbook   — roda setup_aerodrome.yml apontando pro raspi-sim
+#   make down       — derruba tudo
+
+services:
+  raspi-sim:
+    build:
+      context: .
+      dockerfile: raspi-sim/Dockerfile
+    container_name: aerobi-lab-raspi
+    hostname: raspi-sim
+    privileged: true
+    cgroup: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    ports:
+      - "127.0.0.1:2222:22"
+    networks:
+      aerodrome:
+        ipv4_address: 192.168.68.10
+    restart: unless-stopped
+
+  cam-1:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: aerobi-lab-cam-1
+    hostname: cam-1
+    environment:
+      MTX_CAM_NAME: cam-1
+    volumes:
+      - ./fake-camera/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      aerodrome:
+        ipv4_address: 192.168.68.91
+    restart: unless-stopped
+
+  cam-2:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: aerobi-lab-cam-2
+    hostname: cam-2
+    environment:
+      MTX_CAM_NAME: cam-2
+    volumes:
+      - ./fake-camera/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      aerodrome:
+        ipv4_address: 192.168.68.92
+    restart: unless-stopped
+
+  cam-3:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: aerobi-lab-cam-3
+    hostname: cam-3
+    environment:
+      MTX_CAM_NAME: cam-3
+    volumes:
+      - ./fake-camera/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      aerodrome:
+        ipv4_address: 192.168.68.93
+    restart: unless-stopped
+
+  cam-4:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: aerobi-lab-cam-4
+    hostname: cam-4
+    environment:
+      MTX_CAM_NAME: cam-4
+    volumes:
+      - ./fake-camera/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      aerodrome:
+        ipv4_address: 192.168.68.94
+    restart: unless-stopped
+
+networks:
+  aerodrome:
+    name: aerobi-aerodrome-lab
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.68.0/24
+          gateway: 192.168.68.1

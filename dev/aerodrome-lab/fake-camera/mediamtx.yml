@@ -1,0 +1,36 @@
+# Config do mediamtx que roda dentro de cada container "câmera fake".
+# ffmpeg gera testsrc (color bars com texto sobreposto) e publica no
+# próprio mediamtx local em /live. De fora, raspi-sim acessa em
+# rtsp://192.168.68.9X:8554/live (mesmo path em todas as câmeras —
+# o que diferencia é o IP).
+#
+# A variável $MTX_CAM_NAME é definida pelo docker-compose por container
+# e usada apenas para o texto sobreposto no vídeo (cam-1, cam-2, ...).
+
+logLevel: info
+logDestinations: [stdout]
+
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+
+hls: no
+webrtc: no
+rtmp: no
+srt: no
+
+paths:
+  live:
+    # testsrc2 já vem com timestamp + frame counter embutidos, sem precisar
+    # de drawtext (que exige fontes — ausentes na imagem mediamtx slim).
+    # Pra distinguir câmeras visualmente, cada uma usa um RATE diferente:
+    # cam-1 = 15 fps, cam-2 = 20 fps, cam-3 = 25 fps, cam-4 = 30 fps.
+    # MTX_CAM_NAME aparece no log do mediamtx.
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel warning -re
+      -f lavfi -i testsrc2=size=640x480:rate=15
+      -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -g 30
+      -an
+      -metadata title='${MTX_CAM_NAME}'
+      -f rtsp -rtsp_transport tcp rtsp://localhost:8554/live
+    runOnInitRestart: yes

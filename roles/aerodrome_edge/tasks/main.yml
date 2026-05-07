@@ -1,0 +1,62 @@
+---
+# Role: aerodrome_edge
+#
+# Provisiona um Raspberry Pi como edge de aeródromo:
+#   1. IP forwarding no kernel (pré-requisito do Tailscale subnet routing)
+#   2. Tailscale conectado como tag:airfield, anunciando rotas das câmeras
+#
+# Pré-requisitos do operador antes de aplicar:
+#   - Pre-auth key do Headscale com tag:airfield gerada e salva em
+#     vault_tailscale_authkey_aerodrome
+#   - Variável `aerodrome_camera_subnets` definida no host_vars (lista de CIDRs /32)
+#
+# Tags:
+#   - sysctl       : só o passo de IP forwarding
+#   - tailscale    : tudo do Tailscale (use --skip-tags tailscale no lab)
+
+- name: "Persistir IP forwarding via sysctl.d"
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-aerobi-edge.conf
+    content: |
+      # Gerado pela role aerodrome_edge — não editar manualmente.
+      # Necessário pro Tailscale rotear pacotes da tailnet pra LAN das câmeras.
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+    mode: "0644"
+    owner: root
+    group: root
+  notify: reload sysctl
+  tags:
+    - sysctl
+
+- name: "Aplicar sysctl em runtime (sem precisar reboot)"
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-aerobi-edge.conf
+  changed_when: false
+  tags:
+    - sysctl
+
+- name: "Tailscale subnet router (skipped no lab via --skip-tags tailscale)"
+  tags:
+    - tailscale
+  block:
+    - name: "Aplicar role tailscale_client (instalação + autenticação)"
+      ansible.builtin.import_role:
+        name: tailscale_client
+
+    - name: "Anunciar rotas das câmeras como subnet routes"
+      ansible.builtin.command: >
+        tailscale set
+        --advertise-routes={{ aerodrome_camera_subnets | join(',') }}
+      when: aerodrome_camera_subnets | length > 0
+      changed_when: false  # idempotente — tailscale set é seguro de re-aplicar
+
+    - name: "Mostrar lembrete: aprovar rotas no Headscale (passo manual na VPS)"
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "  Próximo passo manual (na VPS):"
+          - "  ssh deploy@vps-prod"
+          - "  docker exec headscale headscale nodes approve-routes \\"
+          - "    --identifier <ID-DESTE-NODE> \\"
+          - "    --routes {{ aerodrome_camera_subnets | join(',') }}"
+          - "============================================"
