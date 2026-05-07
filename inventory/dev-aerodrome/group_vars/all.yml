@@ -1,0 +1,31 @@
+---
+# Variáveis comuns ao laboratório dev-aerodrome.
+# IPs e nomes simulam o aeródromo MVP (aerobi-edge-mvp).
+
+aerodrome_id: aerobi-edge-lab
+
+# Sub-redes anunciadas pelo Tailscale como subnet routes (em produção).
+# No lab este passo é skipped via --skip-tags tailscale.
+aerodrome_camera_subnets:
+  - 192.168.68.91/32
+  - 192.168.68.92/32
+  - 192.168.68.93/32
+  - 192.168.68.94/32
+
+# Streams que o mediamtx no "raspi-sim" deve puxar das câmeras fake.
+# Cada câmera fake expõe um único path /live no seu próprio mediamtx;
+# o que diferencia uma câmera da outra é o IP de origem (.91 a .94).
+# Em produção a porta é 554 (Intelbras default) e o path varia por modelo
+# (ex: /cam/realmonitor?channel=1&subtype=0 nas Intelbras VIP/iSeries).
+mediamtx_paths:
+  - name: cam-1
+    source: "rtsp://192.168.68.91:8554/live"
+  - name: cam-2
+    source: "rtsp://192.168.68.92:8554/live"
+  - name: cam-3
+    source: "rtsp://192.168.68.93:8554/live"
+  - name: cam-4
+    source: "rtsp://192.168.68.94:8554/live"
+
+# Usuário de deploy padrão do lab (já configurado no Dockerfile do raspi-sim).
+deploy_user: deploy
