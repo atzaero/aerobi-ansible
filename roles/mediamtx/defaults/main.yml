@@ -14,7 +14,13 @@ mediamtx_hls_port: 8888
 #     source: rtsp://admin:senha@192.168.68.91:554/cam/realmonitor?channel=1&subtype=0
 mediamtx_paths: []
 
-# Comportamento "on demand": só conecta na câmera quando alguém pede o stream
+# Comportamento "on demand": só conecta na câmera quando alguém pede o stream.
+# IMPORTANTE: manter true por padrão. Sem on-demand, o mediamtx mantém uma
+# sessão RTSP TCP aberta 24/7 com cada câmera mesmo sem viewer — tráfego LAN
+# constante (~16 Mbps com 4 câmeras 1080p) e ocupa as sessões RTSP limitadas
+# da câmera Intelbras. Lição aprendida em 2026-05-07: instalação manual sem
+# essa flag bombou a rede do aeródromo MVP até ser corrigida.
+# Override por aeródromo (NVR que precisa gravação contínua, p.ex.) é OK no host_vars.
 mediamtx_source_on_demand: true
 mediamtx_source_on_demand_start_timeout: 10s
 mediamtx_source_on_demand_close_after: 10s
