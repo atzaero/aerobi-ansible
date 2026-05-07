@@ -54,15 +54,20 @@ make smoketest
 make ssh
 # → Você vira deploy@raspi-sim
 
-# 4. Rodar o playbook setup_aerodrome.yml contra o raspi-sim
-make playbook
-# → Aplica common, ssh_hardening, fail2ban, aerodrome_edge (skipped tailscale), mediamtx
-# OBS: as roles aerodrome_edge e mediamtx ainda não existem (issues #8, #9, #10).
-#      Por enquanto, só roles existentes são aplicadas via converge no inventory.
+# 4. Rodar o playbook setup_aerodrome.yml — DOIS MODOS:
 
-# 5. Quando as roles existirem, validar fan-out das câmeras
+#   Modo A) Agentless / push (padrão produção): roda DO LAPTOP via SSH
+make playbook
+# → ansible-playbook do host conecta via SSH no raspi-sim e instala
+#   aerodrome_edge (sem tailscale no lab) + mediamtx + 4 paths das câmeras
+
+#   Modo B) Pull / -c local (didático): roda DE DENTRO do raspi-sim
+make playbook-local
+# → docker exec entra no container e roda ansible-playbook lá dentro,
+#   contra localhost (-c local). Mesmo resultado final, jeito diferente.
+
+# 5. Validar fan-out das câmeras (do raspi-sim para as fake-cameras)
 make camera-test
-# → Verifica que raspi-sim alcança rtsp://192.168.68.91:8554/cam-1 etc.
 
 # 6. Derrubar tudo
 make down
@@ -70,6 +75,27 @@ make down
 # Reset total (apaga chaves SSH também):
 make clean
 ```
+
+### Os dois modos do Ansible — quando usar cada
+
+```
+Modo A (push)                     Modo B (pull)
+┌────────────┐                    ┌──────────────┐
+│  Laptop    │                    │  raspi-sim   │
+│            │  ─SSH─►            │              │
+│ ansible-   │      [raspi-sim]   │  ansible-    │
+│  playbook  │                    │   playbook   │
+│            │                    │   -c local   │
+└────────────┘                    └──────────────┘
+make playbook                     make playbook-local
+```
+
+| Modo | Quando usar |
+|---|---|
+| **A — push (`make playbook`)** | Padrão produção. Operador roda do laptop, atinge N raspis em paralelo, atualizações centralizadas, Raspi não precisa ter ansible instalado. |
+| **B — pull (`make playbook-local`)** | Bootstrap inicial via cloud-init/ansible-pull, treinamento de operador novo, demo didática. Operador entra no Raspi e roda ansible lá. |
+
+Os dois rodam **as mesmas roles** e produzem **o mesmo estado final** — só muda quem invoca o `ansible-playbook`. Em produção, recomendamos modo A.
 
 ---
 
@@ -102,7 +128,7 @@ A flag `--skip-tags tailscale` existe **apenas no lab** porque a role `aerodrome
 
 | Limitação | Por quê | Workaround |
 |---|---|---|
-| Sem Tailscale no raspi-sim | Container precisa `--privileged` + `/dev/net/tun` + Headscale acessível; complica debugging | Use `--skip-tags tailscale`. Valide Tailscale só no Raspi físico. |
+| Sem Tailscale no raspi-sim | Container precisa `--privileged` + `/dev/net/tun` + Headscale acessível; complica debugging | Use `--skip-tags tailscale` (ambos `make playbook` e `make playbook-local` já fazem). Valide Tailscale só no Raspi físico. |
 | Câmera fake usa porta 8554 RTSP | Câmera Intelbras real usa 554. ffmpeg rodando como non-root no container não consegue bindar < 1024. | Em produção a porta 554 funciona normal. O lab usa 8554 nas vars do inventory `dev-aerodrome`. |
 | Sem áudio nas câmeras fake | `testsrc` é vídeo puro. Câmera real Intelbras tem áudio AAC. | Não relevante pra MVP de monitoramento visual. |
 | Resolução 640×480 nas câmeras fake | CPU local não justifica 1080p para teste de pipeline | Câmera real entrega 1080p H.264 4 Mbps. mediamtx faz remux passthrough — tanto faz a resolução. |

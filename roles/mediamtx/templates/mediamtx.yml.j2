@@ -1,0 +1,36 @@
+{{ ansible_managed | comment }}
+# Aerobi mediamtx — recebe RTSP das câmeras locais e re-publica como HLS
+# para o backend Aerobi consumir via tailnet.
+
+logLevel: info
+logDestinations: [stdout]
+
+# RTSP server desabilitado: não somos servidor RTSP, somos cliente das câmeras
+rtsp: no
+
+# HLS exposto. Em produção: porta {{ mediamtx_hls_port }} acessível só pela tailnet
+# (firewall do host bloqueia internet pública).
+hls: yes
+hlsAddress: ":{{ mediamtx_hls_port }}"
+hlsAlwaysRemux: yes
+hlsVariant: {{ mediamtx_hls_variant }}
+hlsSegmentCount: {{ mediamtx_hls_segment_count }}
+hlsSegmentDuration: {{ mediamtx_hls_segment_duration }}
+hlsAllowOrigins: {{ mediamtx_hls_allow_origins | to_json }}
+
+# Outros protocolos desabilitados (P1+, fora do MVP)
+webrtc: no
+rtmp: no
+srt: no
+
+paths:
+{% for path in mediamtx_paths %}
+  {{ path.name }}:
+    source: {{ path.source }}
+    rtspTransport: tcp
+{% if mediamtx_source_on_demand %}
+    sourceOnDemand: yes
+    sourceOnDemandStartTimeout: {{ mediamtx_source_on_demand_start_timeout }}
+    sourceOnDemandCloseAfter: {{ mediamtx_source_on_demand_close_after }}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,16 @@
+---
+# Defaults: aerodrome_edge
+
+# Identificador do aeródromo — usado como hostname Tailscale e em logs.
+aerodrome_id: "{{ inventory_hostname }}"
+
+# Lista de CIDRs (/32 por câmera, ou /24 da LAN inteira) que o Raspi anuncia
+# como subnet routes pra tailnet. Definir no host_vars de cada aeródromo.
+aerodrome_camera_subnets: []
+
+# Override de vars do tailscale_client específico pra aeródromo
+tailscale_hostname: "{{ aerodrome_id }}"
+tailscale_tags: "tag:airfield"
+tailscale_accept_routes: false  # aeródromo não precisa receber rotas de outros nós
+tailscale_advertise_exit_node: false
+tailscale_authkey: "{{ vault_tailscale_authkey_aerodrome | default('') }}"

@@ -21,6 +21,11 @@ services:
     cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # Monta o repo aerobi-ansible em /repo dentro do raspi-sim (read-only).
+      # Permite o "modo pull" — operador entra via SSH e roda `ansible-playbook
+      # -c local` de dentro, em vez do laptop. Didático e equivalente a
+      # bootstrap via cloud-init/ansible-pull em produção.
+      - ../../:/repo:ro
     ports:
       - "127.0.0.1:2222:22"
     networks:

@@ -1,0 +1,48 @@
+---
+# Playbook: setup_aerodrome
+#
+# Provisiona um Raspberry Pi como aeródromo edge: subnet router Tailscale
+# (tag:airfield) + mediamtx (fan-out RTSP→HLS das câmeras IP).
+#
+# Uso em produção:
+#   ansible-playbook -i inventory/aerodromes/<nome> playbooks/setup_aerodrome.yml
+#
+# Uso no laboratório (sem Tailscale dentro do container):
+#   ansible-playbook -i inventory/dev-aerodrome playbooks/setup_aerodrome.yml \
+#     --skip-tags tailscale
+#
+# Pré-requisitos:
+#   - Raspi acessível via SSH (chave do operador no authorized_keys)
+#   - Pre-auth key tag:airfield no vault (vault_tailscale_authkey_aerodrome)
+#   - host_vars com aerodrome_camera_subnets e mediamtx_paths
+
+- name: "Provisionar aeródromo edge"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: "Garantir python3 disponível (Raspi recém-flashado pode não ter)"
+      ansible.builtin.raw: command -v python3 || (apt-get update -qq && apt-get install -y python3)
+      changed_when: false
+
+  roles:
+    - role: aerodrome_edge
+      tags: [aerodrome_edge]
+
+    - role: mediamtx
+      tags: [mediamtx]
+
+  post_tasks:
+    - name: "Smoke test — mediamtx atendendo na porta HLS"
+      ansible.builtin.uri:
+        url: "http://localhost:{{ mediamtx_hls_port }}/{{ mediamtx_paths[0].name }}/index.m3u8"
+        return_content: false
+        follow_redirects: all
+        status_code: [200]
+      retries: 5
+      delay: 3
+      register: mediamtx_smoke
+      until: mediamtx_smoke.status == 200
+      when: mediamtx_paths | length > 0
+      tags: [smoke]

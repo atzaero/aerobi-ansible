@@ -1,0 +1,32 @@
+---
+# Defaults: mediamtx
+
+# Versão a instalar. Releases: https://github.com/bluenviron/mediamtx/releases
+mediamtx_version: v1.18.1
+
+# Portas
+mediamtx_hls_port: 8888
+
+# Lista de paths que mediamtx deve servir.
+# Cada item: { name: <stream-name>, source: <url-rtsp> }
+# Exemplo:
+#   - name: cam-1
+#     source: rtsp://admin:senha@192.168.68.91:554/cam/realmonitor?channel=1&subtype=0
+mediamtx_paths: []
+
+# Comportamento "on demand": só conecta na câmera quando alguém pede o stream
+mediamtx_source_on_demand: true
+mediamtx_source_on_demand_start_timeout: 10s
+mediamtx_source_on_demand_close_after: 10s
+
+# HLS settings
+mediamtx_hls_segment_count: 7
+mediamtx_hls_segment_duration: 1s
+mediamtx_hls_variant: fmp4
+mediamtx_hls_allow_origins:
+  - "*"
+
+# Hardening systemd
+mediamtx_systemd_no_new_privileges: true
+mediamtx_systemd_protect_system: strict
+mediamtx_systemd_protect_home: true
