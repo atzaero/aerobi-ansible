@@ -4,6 +4,12 @@
 # Valores padrão seguros para produção.
 # Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
 
+# Imagem pinada — bumpar revisando https://github.com/dani-garcia/vaultwarden/releases.
+# Major bumps podem exigir migração de schema; ler release notes antes.
+# Validar com `docker manifest inspect <imagem>:<tag>` antes de aplicar.
+vaultwarden_image: vaultwarden/server
+vaultwarden_version: "1.36.0"
+
 vaultwarden_container_name: vaultwarden
 vaultwarden_port: 3010
 vaultwarden_volume_name: vaultwarden_data

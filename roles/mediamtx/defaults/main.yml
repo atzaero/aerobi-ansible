@@ -2,6 +2,8 @@
 # Defaults: mediamtx
 
 # Versão a instalar. Releases: https://github.com/bluenviron/mediamtx/releases
+# Validar que o asset linux_arm64v8 existe na release antes de bumpar
+# (releases antigas podem ter o tarball removido).
 mediamtx_version: v1.18.1
 
 # Portas
