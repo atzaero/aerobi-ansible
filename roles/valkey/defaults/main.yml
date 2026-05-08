@@ -1,0 +1,68 @@
+---
+# Defaults: valkey
+#
+# Sobrescreva em inventory/<env>/group_vars/all/all.yml conforme necessário.
+
+# ------------------------------------------------------------
+# Imagem e container
+# ------------------------------------------------------------
+# Pin explícito pra reprodutibilidade. Atualizar manualmente após revisar
+# changelog: https://github.com/valkey-io/valkey/releases
+# IMPORTANTE: validar com `docker manifest inspect valkey/valkey:<tag>`
+# antes de pinar (releases podem ser removidas do registry).
+valkey_image: valkey/valkey
+valkey_version: "9.0.3"
+valkey_container_name: valkey
+
+# ------------------------------------------------------------
+# Rede e portas
+# ------------------------------------------------------------
+# 127.0.0.1 only — apps acessam via rede warpgate. Sem vhost público
+# (Valkey é serviço interno, sem necessidade de TLS via certbot).
+valkey_bind_address: "127.0.0.1"
+valkey_port: 6379
+
+docker_network_name: warpgate
+
+# ------------------------------------------------------------
+# Autenticação — sobrescrever via vault em prod
+# ------------------------------------------------------------
+valkey_password: changeme
+
+# ------------------------------------------------------------
+# UID/GID do processo dentro do container
+# ------------------------------------------------------------
+# Mesma lógica do MinIO: roda como dono do volume de dados pra evitar
+# arquivos com owner root no host. 1001:1001 alinha com o deploy_user
+# em prod (validado em 2026-05-07: id deploy → uid=1001 gid=1001).
+valkey_container_uid: 1001
+valkey_container_gid: 1001
+
+# ------------------------------------------------------------
+# Storage em disco
+# ------------------------------------------------------------
+valkey_data_dir: "/home/{{ deploy_user }}/valkey/data"
+
+# ------------------------------------------------------------
+# Persistência
+# ------------------------------------------------------------
+# AOF (Append-Only File): durabilidade — replay de cada write em caso
+# de crash. fsync everysec é o sweet spot (perde no máx 1s vs ~zero).
+valkey_aof_enabled: "yes"
+valkey_aof_fsync: "everysec"
+
+# RDB snapshots: gravação periódica do dataset inteiro. Defaults oficiais:
+#   3600s se >=1 mudança, 300s se >=100 mudanças, 60s se >=10000 mudanças
+valkey_rdb_save_policy: "3600 1 300 100 60 10000"
+
+# ------------------------------------------------------------
+# Limites de memória
+# ------------------------------------------------------------
+# 512mb cobre cache + sessão pra workload inicial. Bumpa quando viver
+# carga real (monitorar via `INFO memory`).
+valkey_maxmemory: "512mb"
+
+# allkeys-lru: evicta keys menos usadas globalmente quando atinge maxmemory.
+# Alternativas: volatile-lru (só keys com TTL), noeviction (returns error).
+# LRU genérico é seguro pra "cache + sessão misturados".
+valkey_maxmemory_policy: "allkeys-lru"

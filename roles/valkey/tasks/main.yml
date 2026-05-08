@@ -1,0 +1,98 @@
+---
+# Role: valkey
+#
+# Sobe Valkey (fork OSS do Redis) em container Docker. Serviço interno —
+# sem vhost público, exposto apenas em 127.0.0.1 e na rede warpgate.
+#
+# Pré-requisitos:
+#   - Docker instalado (role: docker)
+#   - Rede Docker `warpgate` criada (role: docker_network)
+#
+# Variáveis obrigatórias:
+#   - valkey_password : senha forte (em prod sempre via vault)
+#
+# Segurança:
+#   - requirepass obrigatório (role falha se default 'changeme')
+#   - Bind 127.0.0.1 only no host
+#   - User 1001:1001 (não root) — alinha com owner do volume
+
+- name: Validar credenciais do Valkey
+  fail:
+    msg: >
+      valkey_password está no default 'changeme' ou vazio.
+      Configure via inventory (dev) ou vault (prod) antes de aplicar.
+  when: valkey_password in ['changeme', '', None]
+
+- name: Garantir diretório de dados do Valkey
+  file:
+    path: "{{ valkey_data_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Subir container Valkey {{ valkey_version }}
+  community.docker.docker_container:
+    name: "{{ valkey_container_name }}"
+    image: "{{ valkey_image }}:{{ valkey_version }}"
+    state: started
+    restart_policy: unless-stopped
+    # Roda como o usuário dono do volume de dados pra evitar arquivos com
+    # owner root (exige sudo do host pra limpar/backup/migrar).
+    user: "{{ valkey_container_uid }}:{{ valkey_container_gid }}"
+    ports:
+      - "{{ valkey_bind_address }}:{{ valkey_port }}:6379"
+    env:
+      # REDISCLI_AUTH é lido automaticamente pelo valkey-cli — permite
+      # healthcheck/comandos sem expor senha em argv (visível em
+      # `docker inspect` / `ps`).
+      REDISCLI_AUTH: "{{ valkey_password }}"
+    volumes:
+      - "{{ valkey_data_dir }}:/data"
+    networks:
+      - name: "{{ docker_network_name }}"
+    command:
+      - --requirepass
+      - "{{ valkey_password }}"
+      - --appendonly
+      - "{{ valkey_aof_enabled }}"
+      - --appendfsync
+      - "{{ valkey_aof_fsync }}"
+      - --save
+      - "{{ valkey_rdb_save_policy }}"
+      - --maxmemory
+      - "{{ valkey_maxmemory }}"
+      - --maxmemory-policy
+      - "{{ valkey_maxmemory_policy }}"
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+- name: Aguardar Valkey responder em 127.0.0.1:{{ valkey_port }}
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ valkey_port }}"
+    delay: 2
+    timeout: 30
+    msg: "Valkey não respondeu na porta {{ valkey_port }} em 30s"
+
+- name: Exibir resumo do Valkey
+  debug:
+    msg:
+      - "============================================"
+      - "  Valkey provisionado com sucesso!"
+      - "============================================"
+      - "  Local       : {{ valkey_bind_address }}:{{ valkey_port }}"
+      - "  Versão      : {{ valkey_version }}"
+      - "  Persistência: AOF={{ valkey_aof_enabled }} (fsync={{ valkey_aof_fsync }})"
+      - "  Memória     : maxmemory={{ valkey_maxmemory }} policy={{ valkey_maxmemory_policy }}"
+      - "  Data        : {{ valkey_data_dir }}"
+      - "--------------------------------------------"
+      - "  Conexão interna (rede {{ docker_network_name }}):"
+      - "    redis://default:<senha>@{{ valkey_container_name }}:6379"
+      - "  Debug local (host VPS):"
+      - "    REDISCLI_AUTH=<senha> docker exec -it {{ valkey_container_name }} valkey-cli"
+      - "============================================"
