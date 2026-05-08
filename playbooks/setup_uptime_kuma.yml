@@ -1,0 +1,22 @@
+---
+# Playbook: setup_uptime_kuma.yml
+#
+# Sobe Uptime Kuma (status page + monitoring self-hosted) em container
+# Docker. O vhost público + TLS é criado separadamente via setup_app.yml
+# com vhost_websocket_enabled=true vhost_tailnet_only=true (admin-only,
+# acesso via tailnet).
+#
+# Pré-requisitos:
+#   - Docker + rede warpgate (setup_vps.yml)
+#   - DNS no registro.br: status.aerobi.com.br → 187.127.6.20
+#
+# Uso:
+#   ansible-playbook playbooks/setup_uptime_kuma.yml
+#
+# Sequência completa: ver roles/uptime_kuma/README.md ou docs/BOOTSTRAP.md.
+
+- name: Configurar Uptime Kuma (status page + monitoring)
+  hosts: all
+  become: yes
+  roles:
+    - role: uptime_kuma
