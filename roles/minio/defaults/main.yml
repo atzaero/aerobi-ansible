@@ -12,7 +12,8 @@ minio_image: quay.io/minio/minio
 # changelog: https://github.com/minio/minio/releases — priorizar releases
 # marcadas "Security/CVE". IMPORTANTE: validar com `docker manifest inspect`
 # que a tag existe no registry antes de pinar — releases recentes às vezes
-# são removidas.
+# são removidas (caso documentado em 2025-10-15: release anunciada no
+# GitHub mas ausente em quay.io/minio/minio e hub.docker.com/r/minio/minio).
 minio_version: "RELEASE.2025-09-07T16-13-09Z"
 minio_container_name: minio
 
