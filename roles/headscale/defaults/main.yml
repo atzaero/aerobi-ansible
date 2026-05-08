@@ -5,6 +5,9 @@
 # Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
 
 headscale_container_name: headscale
+# Imagem pinada — bumpar revisando https://github.com/juanfont/headscale/releases.
+# Validar com `docker manifest inspect <imagem>:<tag>` antes de aplicar (releases
+# antigas podem ser removidas do registry).
 headscale_image: "headscale/headscale:0.28.0"
 
 # Porta interna do Headscale — exposta apenas em localhost,
