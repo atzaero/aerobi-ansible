@@ -1,0 +1,9 @@
+---
+# Handlers da role common.
+
+- name: update initramfs
+  # -k all regenera o initramfs de TODAS as versões de kernel instaladas.
+  # Importante porque a VPS pode bootar num kernel antigo (rollback, fallback)
+  # e perder a blacklist se só o kernel ativo for atualizado.
+  ansible.builtin.command: update-initramfs -u -k all
+  changed_when: true
