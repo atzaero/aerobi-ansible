@@ -1,0 +1,34 @@
+---
+# Role: postgres_tailnet_proxy
+#
+# Sobe um sidecar socat (network_mode: host) que escuta em
+# <IP_TAILNET_VPS>:5432 e faz forward para 127.0.0.1:5432 (onde o
+# Postgres já bind). Permite que clientes da tailnet (DBeaver, psql)
+# conectem direto sem SSH tunnel.
+
+# ------------------------------------------------------------
+# Imagem e container
+# ------------------------------------------------------------
+# Pin explícito. Atualizar revisando https://hub.docker.com/r/alpine/socat
+# Validar com `docker manifest inspect alpine/socat:<tag>` antes de pinar.
+postgres_tailnet_proxy_image: alpine/socat
+postgres_tailnet_proxy_version: "1.8.0.3"
+postgres_tailnet_proxy_container_name: postgres_tailnet_proxy
+
+# ------------------------------------------------------------
+# Endereço de bind
+# ------------------------------------------------------------
+# IP da VPS na tailnet — descobrir com `tailscale ip -4` na VPS.
+# Em prod aerobi: 100.64.0.1.
+# Não usar 0.0.0.0 — escutaria também em eth0 e exporia postgres
+# pra internet pública.
+postgres_tailnet_proxy_listen_ip: "100.64.0.1"
+postgres_tailnet_proxy_listen_port: 5432
+
+# ------------------------------------------------------------
+# Backend (postgres no host)
+# ------------------------------------------------------------
+# Postgres já escuta em 127.0.0.1:5432 via docker_container do role
+# postgres. Não mudar a menos que o bind do postgres mude.
+postgres_tailnet_proxy_backend_host: "127.0.0.1"
+postgres_tailnet_proxy_backend_port: 5432

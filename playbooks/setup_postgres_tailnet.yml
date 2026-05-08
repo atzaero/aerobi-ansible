@@ -1,0 +1,23 @@
+---
+# Playbook: setup_postgres_tailnet.yml
+#
+# Sobe sidecar socat que expõe o Postgres na interface tailscale0 da VPS
+# (100.64.0.1:5432). Permite acesso direto via DBeaver/psql de qualquer
+# cliente conectado à tailnet, sem precisar de SSH tunnel.
+#
+# Closes #7 — antes desta role, o caminho era `ssh -L 5432:localhost:5432`
+# porque docker_container -p ... bypass o UFW pelas regras na chain DOCKER.
+# Solução: socat com network_mode: host (escuta direto em tailscale0).
+#
+# Pré-requisitos:
+#   - Postgres rodando (setup_database.yml)
+#   - VPS conectada à tailnet (setup_vps.yml --tags tailscale)
+#
+# Uso:
+#   ansible-playbook playbooks/setup_postgres_tailnet.yml
+
+- name: Configurar Postgres acessível via tailnet (sidecar socat)
+  hosts: all
+  become: yes
+  roles:
+    - role: postgres_tailnet_proxy

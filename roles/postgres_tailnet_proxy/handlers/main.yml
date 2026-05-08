@@ -1,0 +1,6 @@
+---
+- name: Reiniciar postgres_tailnet_proxy
+  community.docker.docker_container:
+    name: "{{ postgres_tailnet_proxy_container_name }}"
+    state: started
+    restart: yes
