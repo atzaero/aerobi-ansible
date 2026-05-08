@@ -96,6 +96,20 @@ postgres_apps:
     password: barber_dev
 
 # ------------------------------------------------------------
+# MinIO — object storage S3-compatible — dev
+# ------------------------------------------------------------
+# Em dev, bind 0.0.0.0 (acesso direto facilita debug) + senha plaintext.
+# Portas 9000/9001 já liberadas em ufw_allowed_ports.
+minio_root_user: aerobi-admin
+minio_root_password: minio_dev_only
+minio_bind_address: "0.0.0.0"
+minio_container_uid: 1001
+minio_container_gid: 1001
+minio_buckets:
+  - name: aerobi-dev-uploads
+    public_read: false
+
+# ------------------------------------------------------------
 # Ambiente
 # ------------------------------------------------------------
 environment_name: dev
