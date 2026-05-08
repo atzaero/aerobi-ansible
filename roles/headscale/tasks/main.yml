@@ -28,6 +28,24 @@
 #   4. Aplicar role tailscale_client para conectar a VPS na tailnet
 
 # ----------------------------------------------------------------
+# Validação de inputs obrigatórios
+# ----------------------------------------------------------------
+
+- name: Validar headscale_domain definido
+  fail:
+    msg: >
+      headscale_domain vazio. Configure no inventory antes de aplicar
+      (ex: headscale_domain: "headscale.aerobi.com.br").
+  when: headscale_domain in ['', None]
+
+- name: Validar credenciais do banco Headscale
+  fail:
+    msg: >
+      vault_headscale_db_password vazio ou 'changeme'.
+      Configure no vault antes de aplicar.
+  when: vault_headscale_db_password | default('') in ['changeme', '', None]
+
+# ----------------------------------------------------------------
 # Volumes e diretórios
 # ----------------------------------------------------------------
 

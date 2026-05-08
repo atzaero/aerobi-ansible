@@ -13,6 +13,13 @@
 #   - Conectado à rede "warpgate" compartilhada
 #   - Apps se conectam usando hostname: postgres
 
+- name: Validar credenciais do PostgreSQL
+  fail:
+    msg: >
+      postgres_password está em 'changeme' ou vazio.
+      Configure via vault (prod) ou inventory (dev) antes de aplicar.
+  when: postgres_password in ['changeme', '', None]
+
 - name: Garantir que o volume de dados existe
   community.docker.docker_volume:
     name: "{{ postgres_volume_name }}"

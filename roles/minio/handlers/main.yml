@@ -1,0 +1,6 @@
+---
+- name: Reiniciar MinIO
+  community.docker.docker_container:
+    name: "{{ minio_container_name }}"
+    state: started
+    restart: true
