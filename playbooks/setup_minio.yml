@@ -1,0 +1,26 @@
+---
+# Playbook: setup_minio.yml
+#
+# Descrição: sobe MinIO (S3-compatible storage) em container Docker com
+# os buckets declarados em `minio_buckets` (inventory).
+#
+# Deve ser executado APÓS setup_vps.yml + setup_docker.yml (rede warpgate
+# existente, Docker instalado).
+#
+# Uso:
+#   ansible-playbook playbooks/setup_minio.yml                      # prod (padrão)
+#   ansible-playbook -i inventory/dev playbooks/setup_minio.yml     # dev
+#
+# Pré-requisitos:
+#   - Docker instalado (role: docker)
+#   - Rede warpgate criada (role: docker_network)
+#   - Senha root definida em inventory (dev) ou vault (prod)
+#   - DNS criado no registro.br para s3.aerobi.com.br e
+#     s3-console.aerobi.com.br (para o passo subsequente de setup_app.yml)
+
+- name: Configurar MinIO self-hosted
+  hosts: all
+  become: yes
+
+  roles:
+    - role: minio

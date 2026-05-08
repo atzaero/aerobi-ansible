@@ -1,0 +1,87 @@
+---
+# Role: minio
+#
+# Provisiona MinIO (S3-compatible storage) em container Docker + cria
+# buckets listados em minio_buckets.
+#
+# Todas as tasks são idempotentes — seguro rodar múltiplas vezes.
+
+- name: Validar credenciais do MinIO
+  fail:
+    msg: >
+      minio_root_password está no default 'changeme' ou vazio.
+      Configure via inventory (dev) ou vault (prod) antes de aplicar.
+  when: minio_root_password in ['changeme', '', None]
+
+- name: Garantir diretório de dados do MinIO
+  file:
+    path: "{{ minio_data_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Subir container MinIO {{ minio_version }}
+  community.docker.docker_container:
+    name: "{{ minio_container_name }}"
+    image: "{{ minio_image }}:{{ minio_version }}"
+    state: started
+    restart_policy: unless-stopped
+    # Roda como o usuário dono do volume de dados pra evitar arquivos com
+    # owner root (exige sudo do host pra limpar/backup/migrar).
+    user: "{{ minio_container_uid }}:{{ minio_container_gid }}"
+    ports:
+      - "{{ minio_bind_address }}:{{ minio_port_api }}:{{ minio_port_api_internal }}"
+      - "{{ minio_bind_address }}:{{ minio_port_console }}:{{ minio_port_console_internal }}"
+    env:
+      MINIO_ROOT_USER: "{{ minio_root_user }}"
+      MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
+    volumes:
+      - "{{ minio_data_dir }}:/data"
+    networks:
+      - name: "{{ docker_network_name }}"
+    command:
+      - server
+      - --console-address
+      - ":{{ minio_port_console_internal }}"
+      - /data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "curl -f http://localhost:{{ minio_port_api_internal }}/minio/health/live || exit 1"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+- name: Aguardar MinIO ficar saudável
+  uri:
+    url: "http://127.0.0.1:{{ minio_port_api }}/minio/health/live"
+    status_code: 200
+  register: minio_health
+  retries: 30
+  delay: 2
+  until: minio_health.status is defined and minio_health.status == 200
+
+- name: Provisionar buckets declarados em minio_buckets
+  include_tasks: bucket.yml
+  loop: "{{ minio_buckets }}"
+  loop_control:
+    loop_var: bucket
+    label: "{{ bucket.name }}"
+  when: minio_buckets | length > 0
+
+- name: Exibir resumo do MinIO
+  debug:
+    msg:
+      - "============================================"
+      - "  MinIO provisionado com sucesso!"
+      - "============================================"
+      - "  API     : http://{{ minio_bind_address }}:{{ minio_port_api }}"
+      - "  Console : http://{{ minio_bind_address }}:{{ minio_port_console }}"
+      - "  Data    : {{ minio_data_dir }}"
+      - "  Buckets : {% if minio_buckets | length > 0 %}{% for b in minio_buckets %}{{ b.name }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}(nenhum){% endif %}"
+      - "--------------------------------------------"
+      - "  Conexão interna (rede {{ docker_network_name }}):"
+      - "  S3 endpoint: http://{{ minio_container_name }}:{{ minio_port_api_internal }}"
+      - "============================================"

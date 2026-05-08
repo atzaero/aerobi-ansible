@@ -198,6 +198,38 @@ valkey_maxmemory: "512mb"
 tailscale_tags: "tag:vps"
 
 # ------------------------------------------------------------
+# MinIO — object storage S3-compatible
+# ------------------------------------------------------------
+# DNS no registro.br (criar antes de aplicar setup_app.yml com vhosts):
+#   s3.aerobi.com.br         → A → 187.127.6.20  (público — apps consomem)
+#   s3-console.aerobi.com.br → A → 187.127.6.20  (tailnet-only — admin)
+#
+# Vault — adicione antes de aplicar:
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_minio_root_password' \
+#     --vault-id default@~/.ansible-vault/aerobi-prod \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+# Após o playbook subir o container, expor com TLS:
+#   # API pública (uploads grandes):
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=minio_api app_domain=s3.aerobi.com.br app_port=9000 vhost_client_max_body_size=25m"
+#   # Console tailnet-only (object browser usa wss://):
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=minio_console app_domain=s3-console.aerobi.com.br app_port=9001 vhost_websocket_enabled=true vhost_tailnet_only=true"
+#
+minio_root_user: aerobi-admin
+minio_root_password: "{{ vault_minio_root_password }}"
+minio_bind_address: "127.0.0.1"
+minio_container_uid: 1001
+minio_container_gid: 1001
+minio_buckets:
+  - name: aerobi-prod-uploads
+    public_read: false
+  - name: aerobi-prod-backups
+    public_read: false
+
+# ------------------------------------------------------------
 # Ambiente
 # ------------------------------------------------------------
 environment_name: prod

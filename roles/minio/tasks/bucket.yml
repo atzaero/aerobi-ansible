@@ -1,0 +1,42 @@
+---
+# Provisiona um bucket individual via mc (MinIO Client) em container
+# efêmero. Idempotente:
+#   - mc mb --ignore-existing não falha se bucket já existe
+#   - mc anonymous set é overwrite-safe
+
+- name: "Criar bucket '{{ bucket.name }}' (idempotente)"
+  community.docker.docker_container:
+    name: "minio-mc-create-{{ bucket.name }}"
+    image: "{{ minio_mc_image }}:{{ minio_mc_version }}"
+    state: started
+    detach: false
+    auto_remove: true
+    networks:
+      - name: "{{ docker_network_name }}"
+    env:
+      MC_HOST_myminio: "http://{{ minio_root_user }}:{{ minio_root_password }}@{{ minio_container_name }}:{{ minio_port_api_internal }}"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "mc mb --ignore-existing myminio/{{ bucket.name }}"
+  no_log: true
+  changed_when: false
+
+- name: "Aplicar policy 'public-read' em '{{ bucket.name }}'"
+  when: bucket.public_read | default(false)
+  community.docker.docker_container:
+    name: "minio-mc-policy-{{ bucket.name }}"
+    image: "{{ minio_mc_image }}:{{ minio_mc_version }}"
+    state: started
+    detach: false
+    auto_remove: true
+    networks:
+      - name: "{{ docker_network_name }}"
+    env:
+      MC_HOST_myminio: "http://{{ minio_root_user }}:{{ minio_root_password }}@{{ minio_container_name }}:{{ minio_port_api_internal }}"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "mc anonymous set download myminio/{{ bucket.name }}"
+  no_log: true
+  changed_when: false

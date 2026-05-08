@@ -1,0 +1,75 @@
+---
+# Role: minio
+#
+# Sobe MinIO (S3-compatible object storage) via Docker com configuração
+# segura. Reutilizável por múltiplos projetos (buckets separados).
+
+# ------------------------------------------------------------
+# Imagem e container
+# ------------------------------------------------------------
+minio_image: quay.io/minio/minio
+# Pin explícito pra reprodutibilidade. Atualizar manualmente após revisar
+# changelog: https://github.com/minio/minio/releases — priorizar releases
+# marcadas "Security/CVE". IMPORTANTE: validar com `docker manifest inspect`
+# que a tag existe no registry antes de pinar — releases recentes às vezes
+# são removidas.
+minio_version: "RELEASE.2025-09-07T16-13-09Z"
+minio_container_name: minio
+
+# Imagem do cliente MinIO (mc) — usado para provisionar buckets.
+# mc tem ciclo de release próprio (não bate com minio servidor). Ver
+# https://github.com/minio/mc/releases ou tags em hub.docker.com/r/minio/mc.
+minio_mc_image: minio/mc
+minio_mc_version: "RELEASE.2025-08-13T08-35-41Z"
+
+# ------------------------------------------------------------
+# Credenciais do root — sobrescreva via group_vars ou vault
+# ------------------------------------------------------------
+minio_root_user: minioadmin
+minio_root_password: changeme
+
+# ------------------------------------------------------------
+# Rede e portas
+# ------------------------------------------------------------
+# Portas internas do container (não mexer — default oficial do MinIO)
+minio_port_api_internal: 9000
+minio_port_console_internal: 9001
+
+# Portas expostas no host
+minio_port_api: 9000
+minio_port_console: 9001
+
+# Endereço de bind no host.
+#   prod: "127.0.0.1" (localhost only — acesso público via nginx + TLS)
+#   dev : "0.0.0.0"   (acesso direto facilita debugging)
+minio_bind_address: "127.0.0.1"
+
+# Rede Docker compartilhada (mesma do postgres, apps, etc.)
+docker_network_name: warpgate
+
+# ------------------------------------------------------------
+# UID/GID do processo dentro do container
+# ------------------------------------------------------------
+# MinIO precisa rodar como o usuário dono do minio_data_dir — senão
+# arquivos em /data são criados com owner errado e o host não consegue
+# fazer cleanup/backup/migração sem sudo. Em prod aerobi, deploy_user
+# é uid=1001 gid=1001 (validado em 2026-05-07). Sobrescreva no inventory.
+minio_container_uid: 1000
+minio_container_gid: 1000
+
+# ------------------------------------------------------------
+# Storage em disco
+# ------------------------------------------------------------
+minio_data_dir: "/home/{{ deploy_user }}/minio/data"
+
+# ------------------------------------------------------------
+# Buckets a provisionar
+# ------------------------------------------------------------
+# Cada entrada cria um bucket via mc (MinIO Client).
+# Formato:
+#   minio_buckets:
+#     - name: aerobi-prod-uploads
+#       public_read: false          # default false — acesso via access keys
+#
+# Sobrescreva em inventory/<env>/group_vars/all/all.yml.
+minio_buckets: []
