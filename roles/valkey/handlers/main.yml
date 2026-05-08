@@ -1,0 +1,6 @@
+---
+- name: Reiniciar Valkey
+  community.docker.docker_container:
+    name: "{{ valkey_container_name }}"
+    state: started
+    restart: yes
