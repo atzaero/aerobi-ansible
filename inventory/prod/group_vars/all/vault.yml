@@ -1,7 +1,105 @@
 ---
+# ============================================================================
 # Ansible Vault — valores sensíveis de produção
-# Este arquivo contém valores criptografados com ansible-vault encrypt_string
-# NÃO é whole-file encrypted — os valores individuais são criptografados
+# ============================================================================
+#
+# Per-value encryption: o arquivo em si é texto claro; apenas os valores
+# (blocos !vault | $ANSIBLE_VAULT ...) são criptografados individualmente
+# via `ansible-vault encrypt_string`. Por isso pode versionar este arquivo
+# no git — só os hex blobs vão pro repo, nunca o plaintext.
+#
+# Senha do vault: armazenada em ~/.ansible-vault/aerobi-prod (detectada
+# automático via `vault_password_file` no ansible.cfg). Nunca commitar
+# esse arquivo no git e nunca compartilhar fora do canal seguro da equipe.
+#
+# ----------------------------------------------------------------------------
+# COMO VER UMA SENHA ESPECÍFICA (decryptada em texto claro)
+# ----------------------------------------------------------------------------
+#   cd /home/elvis/aerobi-projects/aerobi-ansible
+#   ansible localhost -m debug -a "var=vault_postgres_password" \
+#     -e "@inventory/prod/group_vars/all/vault.yml" --connection=local
+#
+# Troque vault_postgres_password pelo nome do secret que quer ver.
+# Output: "vault_postgres_password": "<senha em texto claro>".
+#
+# ----------------------------------------------------------------------------
+# COMO VER TODAS AS SENHAS DE UMA VEZ
+# ----------------------------------------------------------------------------
+#   ansible localhost -m debug -a "var=hostvars[inventory_hostname]" \
+#     -e "@inventory/prod/group_vars/all/vault.yml" --connection=local \
+#     | grep -A 0 "^\s*\"vault_"
+#
+# ----------------------------------------------------------------------------
+# COMO VER SÓ O TAMANHO (sem expor o valor — útil pra validar formato)
+# ----------------------------------------------------------------------------
+#   ansible localhost -m debug -a "msg={{ vault_postgres_password | length }}" \
+#     -e "@inventory/prod/group_vars/all/vault.yml" --connection=local
+#
+# Esperado para senhas geradas com `openssl rand -hex 32`: length 64.
+#
+# ----------------------------------------------------------------------------
+# COMO COPIAR UMA SENHA PRO CLIPBOARD (sem scrollback exposto)
+# ----------------------------------------------------------------------------
+#   ansible localhost -m debug -a "var=vault_postgres_password" \
+#     -e "@inventory/prod/group_vars/all/vault.yml" --connection=local \
+#     2>/dev/null | grep '"vault_postgres_password"' \
+#     | sed 's/.*: "\(.*\)".*/\1/' | xclip -selection clipboard
+#
+# (xclip no Linux X11; pbcopy no macOS; wl-copy no Wayland.)
+#
+# ----------------------------------------------------------------------------
+# COMO ADICIONAR UM SECRET NOVO
+# ----------------------------------------------------------------------------
+# Forma rápida (gera senha aleatória e anexa direto no arquivo):
+#
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_nome_da_senha' \
+#     --encrypt-vault-id default \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+# Variantes para senhas legíveis:
+#   openssl rand -base64 24 | tr -d '/+=' | head -c 32   # alfanumérico
+#   pwgen -s 32 1                                        # se tiver pwgen
+#
+# IMPORTANTE: passar a senha via stdin (echo -n ... | ansible-vault) em vez de
+# inline (ansible-vault encrypt_string "<senha>" ...) evita que ela apareça
+# em `ps aux` / shell history.
+#
+# ----------------------------------------------------------------------------
+# COMO ATUALIZAR UM SECRET EXISTENTE
+# ----------------------------------------------------------------------------
+#   1. Abra este arquivo em editor normal (não é file-level encrypted).
+#   2. Apague o bloco `vault_xxx: !vault |` (incluindo as linhas de hex).
+#   3. Gere o novo bloco:
+#        echo -n "<nova senha>" | \
+#          ansible-vault encrypt_string --stdin-name 'vault_xxx' \
+#          --encrypt-vault-id default
+#   4. Cole o output no lugar do bloco antigo.
+#   5. Salve, reaplique o playbook que usa o secret, e commite a mudança.
+#
+# ----------------------------------------------------------------------------
+# COMO TROCAR A SENHA MASTER DO VAULT (rekey global)
+# ----------------------------------------------------------------------------
+# Precisa re-encriptar todos os valores com a nova chave. Como este arquivo
+# é per-value (não file-level), `ansible-vault rekey` NÃO funciona direto.
+# Workaround:
+#   1. Decriptar todas as senhas (ver comandos acima).
+#   2. Trocar ~/.ansible-vault/aerobi-prod pela nova senha master.
+#   3. Re-adicionar cada secret com ansible-vault encrypt_string + apagar o antigo.
+#
+# Em caso de comprometimento da senha master: prefira gerar SENHAS NOVAS para
+# todos os secrets (rotação real) em vez de reencriptar as antigas.
+#
+# ----------------------------------------------------------------------------
+# CAVEAT: shell history
+# ----------------------------------------------------------------------------
+# Comandos que imprimem senhas (debug -a "var=...") podem ficar no histórico
+# (~/.bash_history, ~/.zsh_history). Mitigações:
+#   - Prefixar comando com espaço (se HISTCONTROL=ignorespace).
+#   - Apagar linha específica:  history -d <número>
+#   - Limpar sessão:             history -c
+#
+# ============================================================================
 
 vault_postgres_password: !vault |
           $ANSIBLE_VAULT;1.1;AES256

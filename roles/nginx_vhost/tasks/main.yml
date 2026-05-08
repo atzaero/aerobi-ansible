@@ -62,7 +62,14 @@
 - name: Recarregar Nginx antes de emitir certificado
   meta: flush_handlers
 
-- name: Emitir certificado SSL via Certbot para {{ vhost_domain }}
+- name: Emitir e (re)instalar certificado SSL via Certbot para {{ vhost_domain }}
+  # --reinstall garante que o vhost sempre recebe o bloco `listen 443 ssl;`
+  # mesmo quando o cert já existe (idempotente — não re-emite cert válido).
+  # Sem --reinstall, observamos no projeto fonte (2026-04-24) casos de
+  # vhost sem bloco SSL após first run da role em VPS fresh: certbot
+  # emitia o cert mas o arquivo em /etc/nginx/sites-available/ ficava
+  # apenas com `listen 80;`. --reinstall + remoção de `creates:` elimina
+  # o race.
   command: >
     certbot --nginx
     -d {{ vhost_domain }}
@@ -70,5 +77,4 @@
     --agree-tos
     -m {{ deploy_email }}
     --redirect
-  args:
-    creates: "/etc/letsencrypt/live/{{ vhost_domain }}/fullchain.pem"
+    --reinstall
