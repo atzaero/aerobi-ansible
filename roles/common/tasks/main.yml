@@ -72,3 +72,32 @@
     - { key: "kernel.sysrq", value: "0" }
     # Desabilitar core dumps de processos SUID
     - { key: "fs.suid_dumpable", value: "0" }
+
+# CVE-2026-31431 (Copy Fail) — bloquear carregamento do módulo algif_aead.
+# A Canonical (USN-8226-1) já entrega /etc/modprobe.d/disable-algif_aead.conf
+# via pacote `kmod` patcheado, puxado pelo `apt upgrade dist` acima. Esta task
+# é fallback defense-in-depth: força=no preserva o arquivo da Canonical onde
+# existe (idempotente, sem disparar update-initramfs em loop) e cria um
+# equivalente apenas em hosts onde o pacote ainda não foi atualizado.
+# Quando sair kernel com fix upstream (commit a664bf3d603d): remover este bloco.
+# Ref: https://github.com/atzaero/aerobi-ansible/issues/4
+- name: "CVE-2026-31431: garantir blacklist do módulo algif_aead"
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/disable-algif_aead.conf
+    content: |
+      # CVE-2026-31431 (Copy Fail) — fallback do Ansible.
+      # Remover quando linux-image incorporar commit a664bf3d603d.
+      install algif_aead /bin/false
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+  notify: update initramfs
+  tags: [cve-2026-31431]
+
+- name: "CVE-2026-31431: descarregar algif_aead se estiver carregado"
+  ansible.builtin.command:
+    cmd: modprobe -r algif_aead
+  changed_when: false
+  failed_when: false
+  tags: [cve-2026-31431]
