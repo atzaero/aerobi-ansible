@@ -183,6 +183,22 @@ headscale_user_name: aerobi
 tailscale_tags: "tag:vps"
 
 # ------------------------------------------------------------
+# Uptime Kuma — status + monitoring + domain expiry alerts
+# ------------------------------------------------------------
+# DNS no registro.br: status.aerobi.com.br → A → 187.127.6.20
+# Vhost: tailnet-only (admin acessa via tailscale up no laptop).
+#
+# Sequência pós-merge:
+#   ansible-playbook playbooks/setup_uptime_kuma.yml
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=uptime_kuma app_domain=status.aerobi.com.br \
+#         app_port=3001 vhost_websocket_enabled=true vhost_tailnet_only=true"
+#
+# Primeiro monitor a configurar via UI: Domain Name Expiry → aerobi.com.br
+#
+uptime_kuma_domain: "status.aerobi.com.br"
+
+# ------------------------------------------------------------
 # Ambiente
 # ------------------------------------------------------------
 environment_name: prod

@@ -1,0 +1,37 @@
+---
+# Defaults: uptime_kuma
+#
+# Sobrescreva em inventory/<env>/group_vars/all/all.yml conforme necessário.
+
+# ------------------------------------------------------------
+# Imagem e container
+# ------------------------------------------------------------
+# Pin explícito pra reprodutibilidade. Atualizar manualmente após revisar
+# changelog: https://github.com/louislam/uptime-kuma/releases
+# IMPORTANTE: validar com `docker manifest inspect` antes de pinar
+# (releases podem ser removidas do registry).
+uptime_kuma_image: louislam/uptime-kuma
+uptime_kuma_version: "2.2.1"
+uptime_kuma_container_name: uptime_kuma
+
+# Porta interna do Uptime Kuma + porta exposta no host (apenas localhost,
+# público via nginx + TLS).
+uptime_kuma_port: 3001
+
+# ------------------------------------------------------------
+# Storage (SQLite próprio em /app/data)
+# ------------------------------------------------------------
+# Volume Docker nomeado — gerenciado pelo daemon, sem chown manual.
+uptime_kuma_volume_name: uptime_kuma_data
+
+# ------------------------------------------------------------
+# Domínio público
+# ------------------------------------------------------------
+# Sem default — definir no inventory pra construir o vhost via
+# setup_app.yml. Convenção: status.aerobi.com.br (ver docs/DOMINIOS.md).
+# uptime_kuma_domain: status.aerobi.com.br
+
+# ------------------------------------------------------------
+# Rede Docker compartilhada
+# ------------------------------------------------------------
+docker_network_name: warpgate

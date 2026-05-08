@@ -1,0 +1,6 @@
+---
+- name: Reiniciar Uptime Kuma
+  community.docker.docker_container:
+    name: "{{ uptime_kuma_container_name }}"
+    state: started
+    restart: yes
