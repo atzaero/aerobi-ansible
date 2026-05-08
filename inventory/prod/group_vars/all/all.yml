@@ -178,6 +178,21 @@ headscale_domain: "headscale.aerobi.com.br"
 headscale_user_name: aerobi
 
 # ------------------------------------------------------------
+# Valkey — cache + filas + sessões (fork OSS do Redis)
+# ------------------------------------------------------------
+# Apps consomem via rede warpgate: redis://default:<senha>@valkey:6379
+# Sem vhost público — acesso só interno entre containers.
+#
+# Vault — adicione antes de rodar `ansible-playbook playbooks/setup_valkey.yml`:
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_valkey_password' \
+#     --vault-id default@~/.ansible-vault/aerobi-prod \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+valkey_password: "{{ vault_valkey_password }}"
+valkey_maxmemory: "512mb"
+
+# ------------------------------------------------------------
 # Tailscale client — conecta nós ao Headscale
 # ------------------------------------------------------------
 tailscale_tags: "tag:vps"

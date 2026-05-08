@@ -96,6 +96,13 @@ postgres_apps:
     password: barber_dev
 
 # ------------------------------------------------------------
+# Valkey — cache + filas + sessões (fork OSS do Redis) — dev
+# ------------------------------------------------------------
+# Sem vhost público em qualquer ambiente. Em dev, senha simples sem vault.
+valkey_password: valkey_dev
+valkey_maxmemory: "128mb"
+
+# ------------------------------------------------------------
 # MinIO — object storage S3-compatible — dev
 # ------------------------------------------------------------
 # Em dev, bind 0.0.0.0 (acesso direto facilita debug) + senha plaintext.

@@ -1,5 +1,8 @@
 ---
-# Versão do PostgreSQL
+# Versão do PostgreSQL.
+# MANTER em 17 enquanto houver dados em prod. Bump major (17→18) exige
+# pg_dumpall + restore numa janela de manutenção. Ler release notes da
+# major antes de migrar (https://www.postgresql.org/docs/release/).
 postgres_version: "17"
 
 # Container

@@ -58,11 +58,10 @@
     }) }}"
   when: vaultwarden_smtp_host != ''
 
-- name: Subir container Vaultwarden
+- name: Subir container Vaultwarden {{ vaultwarden_version }}
   community.docker.docker_container:
     name: "{{ vaultwarden_container_name }}"
-    image: "vaultwarden/server:latest"
-    pull: true
+    image: "{{ vaultwarden_image }}:{{ vaultwarden_version }}"
     state: started
     restart_policy: unless-stopped
     ports:
