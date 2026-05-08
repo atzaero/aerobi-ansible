@@ -23,7 +23,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 | 3001 | Uptime Kuma | `127.0.0.1` | Apenas via Nginx em `status.aerobi.com.br` (tailnet-only) |
 | 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` (`/admin` tailnet-only) |
 | 3333 | aerobi-api | `127.0.0.1` | Apenas via Nginx em `api.aerobi.com.br` |
-| 5432 | PostgreSQL 17 | `127.0.0.1` | Apps via rede docker `warpgate`; admin via SSH tunnel (issue [#7](https://github.com/atzaero/aerobi-ansible/issues/7) para tailnet) |
+| 5432 | PostgreSQL 17 | `127.0.0.1` (apps) + `100.64.0.1` (tailnet via socat sidecar) | Apps via rede docker `warpgate`; admin via DBeaver direto em `100.64.0.1:5432` (sem SSH tunnel — issue #7 fechada via `roles/postgres_tailnet_proxy/`) |
 | 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |
 | 8080 | Headscale | `127.0.0.1` | Apenas via Nginx em `headscale.aerobi.com.br` |
 | 9000 | MinIO API | `127.0.0.1` | Apenas via Nginx em `s3.aerobi.com.br` (apps internos via `minio:9000` na rede docker) |

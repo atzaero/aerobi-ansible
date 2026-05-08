@@ -1,0 +1,86 @@
+---
+# Role: postgres_tailnet_proxy
+#
+# Sobe sidecar socat com network_mode: host que escuta no IP da tailnet
+# (default 100.64.0.1:5432) e forward para postgres em 127.0.0.1:5432.
+#
+# Por que socat e não Docker port mapping (-p 100.64.0.1:5432:5432):
+# o Docker insere regras na chain DOCKER do iptables que são avaliadas
+# ANTES do UFW. Resultado: bind em 0.0.0.0 ou IP da tailnet vaza pra
+# internet pública mesmo com UFW configurado para bloquear (issue #7).
+#
+# Com network_mode: host, o container compartilha a rede do host —
+# socat escuta direto na interface tailscale0, sem iptables NAT do
+# Docker. UFW filtra normalmente (ufw_allow_tailscale_interface=true
+# já libera tailscale0 inteira).
+#
+# Pré-requisitos:
+#   - Postgres rodando em 127.0.0.1:5432 (role: postgres)
+#   - VPS conectada à tailnet (role: tailscale_client)
+#
+# Aplicar:
+#   ansible-playbook playbooks/setup_postgres_tailnet.yml
+#
+# Validar (de qualquer cliente na tailnet, com tailscale up):
+#   psql -h 100.64.0.1 -U postgres -d postgres
+#   pg_isready -h 100.64.0.1 -p 5432
+
+- name: Validar listen_ip está dentro do range CGNAT da tailnet
+  fail:
+    msg: >
+      postgres_tailnet_proxy_listen_ip ({{ postgres_tailnet_proxy_listen_ip }})
+      precisa estar no range 100.64.0.0/10 da tailnet.
+      Confirme com `tailscale ip -4` na VPS.
+  when: not (postgres_tailnet_proxy_listen_ip is match('^100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.'))
+
+- name: Subir sidecar socat (postgres tailnet proxy) {{ postgres_tailnet_proxy_version }}
+  community.docker.docker_container:
+    name: "{{ postgres_tailnet_proxy_container_name }}"
+    image: "{{ postgres_tailnet_proxy_image }}:{{ postgres_tailnet_proxy_version }}"
+    state: started
+    restart_policy: unless-stopped
+    # network_mode: host — container compartilha namespace de rede do host.
+    # Necessário pra escutar diretamente em tailscale0 (sem iptables NAT
+    # do Docker que bypass UFW).
+    network_mode: host
+    # Argumentos do socat: TCP-LISTEN em IP:porta da tailnet, fork (1
+    # processo por conexão), reuseaddr (não bloqueia restart com TIME_WAIT),
+    # forward TCP para postgres em 127.0.0.1.
+    command:
+      - "TCP-LISTEN:{{ postgres_tailnet_proxy_listen_port }},bind={{ postgres_tailnet_proxy_listen_ip }},fork,reuseaddr"
+      - "TCP:{{ postgres_tailnet_proxy_backend_host }}:{{ postgres_tailnet_proxy_backend_port }}"
+    security_opts:
+      - "no-new-privileges:true"
+    # Healthcheck: socat não tem comando próprio. Usar /bin/sh + nc para
+    # verificar se a porta de listen está aberta. Se falhar, container
+    # restart pega de volta.
+    healthcheck:
+      test: ["CMD", "/bin/sh", "-c", "nc -z {{ postgres_tailnet_proxy_listen_ip }} {{ postgres_tailnet_proxy_listen_port }}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+- name: Aguardar socat responder em {{ postgres_tailnet_proxy_listen_ip }}:{{ postgres_tailnet_proxy_listen_port }}
+  wait_for:
+    host: "{{ postgres_tailnet_proxy_listen_ip }}"
+    port: "{{ postgres_tailnet_proxy_listen_port }}"
+    delay: 2
+    timeout: 30
+    msg: "Socat não respondeu em {{ postgres_tailnet_proxy_listen_ip }}:{{ postgres_tailnet_proxy_listen_port }} em 30s"
+
+- name: Exibir resumo postgres_tailnet_proxy
+  debug:
+    msg:
+      - "============================================"
+      - "  Postgres acessível via tailnet"
+      - "============================================"
+      - "  Listen   : {{ postgres_tailnet_proxy_listen_ip }}:{{ postgres_tailnet_proxy_listen_port }}"
+      - "  Backend  : {{ postgres_tailnet_proxy_backend_host }}:{{ postgres_tailnet_proxy_backend_port }}"
+      - "  Versão   : socat {{ postgres_tailnet_proxy_version }}"
+      - "--------------------------------------------"
+      - "  Conectar (com tailscale up no cliente):"
+      - "    psql -h {{ postgres_tailnet_proxy_listen_ip }} -U postgres -d postgres"
+      - "    pg_isready -h {{ postgres_tailnet_proxy_listen_ip }} -p 5432"
+      - "    DBeaver: Host={{ postgres_tailnet_proxy_listen_ip }}, Port=5432 (sem SSH tunnel)"
+      - "============================================"
