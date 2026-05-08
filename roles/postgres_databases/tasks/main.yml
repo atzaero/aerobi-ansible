@@ -6,6 +6,16 @@
 #
 # Todas as tasks são idempotentes — seguro rodar múltiplas vezes.
 
+- name: Validar credenciais por app em postgres_apps
+  fail:
+    msg: >
+      Senha vazia ou 'changeme' para a app '{{ item.name }}'.
+      Defina vault_<app>_db_password no vault e referencie em postgres_apps.
+  when: item.password in ['changeme', '', None]
+  loop: "{{ postgres_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Verificar se o container PostgreSQL está rodando
   community.docker.docker_container_info:
     name: "{{ postgres_container_name }}"
