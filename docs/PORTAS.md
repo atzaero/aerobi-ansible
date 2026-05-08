@@ -20,10 +20,14 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 
 | Porta | Serviço | Bind | Acesso |
 |---|---|---|---|
-| 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` |
+| 3001 | Uptime Kuma | `127.0.0.1` | Apenas via Nginx em `status.aerobi.com.br` (tailnet-only) |
+| 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` (`/admin` tailnet-only) |
 | 3333 | aerobi-api | `127.0.0.1` | Apenas via Nginx em `api.aerobi.com.br` |
-| 5432 | PostgreSQL 17 | `127.0.0.1` | Apps via rede docker `warpgate`; admin via SSH tunnel |
+| 5432 | PostgreSQL 17 | `127.0.0.1` | Apps via rede docker `warpgate`; admin via SSH tunnel (issue [#7](https://github.com/atzaero/aerobi-ansible/issues/7) para tailnet) |
+| 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |
 | 8080 | Headscale | `127.0.0.1` | Apenas via Nginx em `headscale.aerobi.com.br` |
+| 9000 | MinIO API | `127.0.0.1` | Apenas via Nginx em `s3.aerobi.com.br` (apps internos via `minio:9000` na rede docker) |
+| 9001 | MinIO Console | `127.0.0.1` | Apenas via Nginx em `s3-console.aerobi.com.br` (tailnet-only) |
 
 ## Tailscale / Headscale
 
@@ -35,6 +39,33 @@ ACL inicial em `roles/headscale/templates/acl.json.j2`:
 - `tag:vps` → `tag:airfield` (backend acessa câmeras de aeródromos)
 - Tudo o mais é negado por padrão (Headscale ACL é deny-by-default fora do que está listado)
 
-## Vaultwarden /admin
+## Convenção de proteção via tailnet (admin-only)
 
-A partir da issue #5, `vault.aerobi.com.br/admin` exige cliente na tailnet (`100.64.0.0/10`). Login `/` continua público para extensão Bitwarden e app mobile. ACL implementada via Nginx `allow/deny` em `roles/vaultwarden/templates/vhost.conf.j2`.
+Endpoints administrativos não devem ficar expostos publicamente. O padrão da plataforma é restringir o vhost ao range CGNAT da Headscale (`100.64.0.0/10`) + localhost via nginx `allow/deny`. Externo retorna 403; admin acessa via `tailscale up` em laptop.
+
+### Endpoints atualmente tailnet-only
+
+| URL | Por quê |
+|---|---|
+| `https://vault.aerobi.com.br/admin` | Painel admin do Vaultwarden — convidar usuários, configurar SMTP, etc. Login `/` continua público para extensão Bitwarden e app mobile. ACL path-level no template próprio da role vaultwarden. |
+| `https://s3-console.aerobi.com.br` | Painel MinIO admin — criar/deletar buckets, gerar access keys. Vhost-level via flag `vhost_tailnet_only=true` em `setup_app.yml`. |
+| `https://status.aerobi.com.br` | Painel Uptime Kuma — criar/editar monitores, canais de notificação. Vhost-level via `vhost_tailnet_only=true`. |
+
+### Como aplicar em novo serviço admin
+
+No `setup_app.yml`, passar `vhost_tailnet_only=true`:
+
+```bash
+ansible-playbook playbooks/setup_app.yml \
+  -e "app_name=<svc> app_domain=<sub>.aerobi.com.br app_port=<porta> vhost_tailnet_only=true"
+```
+
+A flag injeta o bloco no `location /` do template `roles/nginx_vhost/templates/vhost.conf.j2`:
+
+```nginx
+allow 100.64.0.0/10;
+allow 127.0.0.1;
+deny all;
+```
+
+Combinar com `vhost_websocket_enabled=true` se a UI usa WebSocket (MinIO console, Uptime Kuma).
