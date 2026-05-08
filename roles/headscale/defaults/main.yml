@@ -29,3 +29,26 @@ headscale_config_dir: /etc/headscale
 
 # Pasta de pre-auth keys e configs persistentes
 headscale_user_name: aerobi
+
+# ------------------------------------------------------------
+# DNS extra_records — split-DNS para clientes da tailnet
+# ------------------------------------------------------------
+# Subdomínios públicos que devem resolver para IP da tailnet (100.64.0.1)
+# quando o cliente está conectado via Tailscale. Sem isso, vhosts
+# tailnet-only retornam 403 mesmo com tailscale up (DNS público resolve
+# para IP público → tráfego sai pela internet → nginx vê IP externo).
+#
+# Convenção: todos os subdomínios admin-only ou com ACLs por IP devem
+# estar aqui.
+#
+# Sobrescreva no inventory para adicionar/remover entradas.
+headscale_extra_dns_records:
+  - name: vault.aerobi.com.br
+    type: A
+    value: 100.64.0.1
+  - name: s3-console.aerobi.com.br
+    type: A
+    value: 100.64.0.1
+  - name: status.aerobi.com.br
+    type: A
+    value: 100.64.0.1

@@ -57,16 +57,22 @@ dns:
 
   # Override DNS para domínios públicos que devem ser resolvidos pelo IP
   # da tailnet quando o cliente está conectado. Sem isso, o navegador
-  # resolve `vault.aerobi.com.br` pelo DNS público, o request sai pela
+  # resolve `<sub>.aerobi.com.br` pelo DNS público, o request sai pela
   # internet e o Nginx vê IP de origem fora da tailnet — caindo no `deny all`
-  # do bloco `/admin`.
+  # dos vhosts tailnet-only (s3-console, status) e do bloco `/admin` do
+  # Vaultwarden.
   #
   # Requer cliente Tailscale com `--accept-dns=true` (default na role
-  # tailscale_client a partir desta mudança).
+  # tailscale_client).
+  #
+  # Lista declarativa em headscale_extra_dns_records (defaults/main.yml).
+  # Sobrescreva no inventory para adicionar/remover entradas.
   extra_records:
-    - name: vault.aerobi.com.br
-      type: A
-      value: 100.64.0.1
+{% for record in headscale_extra_dns_records %}
+    - name: {{ record.name }}
+      type: {{ record.type | default('A') }}
+      value: {{ record.value }}
+{% endfor %}
 
 # Chaves de criptografia — geradas automaticamente em /var/lib/headscale
 private_key_path: /var/lib/headscale/private.key
