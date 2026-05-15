@@ -246,6 +246,31 @@ minio_buckets:
 uptime_kuma_domain: "status.aerobi.com.br"
 
 # ------------------------------------------------------------
+# SFTP Go — servidor SFTP com web admin
+# ------------------------------------------------------------
+# DNS no Registro.br (criar antes de aplicar setup_app.yml com vhost):
+#   sftp.aerobi.com.br → A → 187.127.6.20 (tailnet-only via vhost nginx)
+#
+# Vault — adicione antes de aplicar:
+#   echo -n "$(openssl rand -base64 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_sftpgo_admin_password' \
+#     --encrypt-vault-id default \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+# Sequência:
+#   ansible-playbook playbooks/setup_sftpgo.yml
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=sftpgo app_domain=sftp.aerobi.com.br app_port=8083 \
+#         vhost_websocket_enabled=true vhost_tailnet_only=true \
+#         vhost_client_max_body_size=5g"
+#
+# Setup admin one-time via https://sftp.aerobi.com.br/web/admin/setup
+# (acesso só pela tailnet — tailscale up no cliente).
+#
+sftpgo_domain: "sftp.aerobi.com.br"
+sftpgo_admin_password: "{{ vault_sftpgo_admin_password }}"
+
+# ------------------------------------------------------------
 # Ambiente
 # ------------------------------------------------------------
 environment_name: prod

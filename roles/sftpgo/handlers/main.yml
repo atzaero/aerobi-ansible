@@ -1,0 +1,6 @@
+---
+- name: Reiniciar SFTP Go
+  community.docker.docker_container:
+    name: "{{ sftpgo_container_name }}"
+    state: started
+    restart: yes

@@ -1,0 +1,106 @@
+---
+# Role: sftpgo
+#
+# Sobe o SFTP Go (servidor SFTP em Go com web admin) via Docker.
+#
+# SEGURANÇA:
+#   - Bind sempre em 127.0.0.1 (web admin) — exposto via Nginx vhost
+#     tailnet-only (aplicado por setup_app.yml fora desta role).
+#   - SFTP em 127.0.0.1:2022 — exposto via sidecar socat
+#     (role sftpgo_tailnet_proxy) em 100.64.0.1:2022 (somente tailnet).
+#   - Senha admin no vault (per-value encryption).
+#   - no-new-privileges no container.
+#   - Data provider SQLite (suficiente pra workload pequena/média).
+#
+# PRÉ-REQUISITOS:
+#   - Docker instalado (role: docker)
+#   - Rede Docker criada (role: docker_network)
+#   - VPS conectada à tailnet (role: tailscale_client)
+
+- name: Validar senha admin do SFTP Go (não pode estar em 'changeme')
+  fail:
+    msg: >
+      sftpgo_admin_password está em 'changeme' ou vazio.
+      Adicione vault_sftpgo_admin_password ao vault antes de aplicar:
+      echo -n "$(openssl rand -base64 32)" | \
+        ansible-vault encrypt_string --stdin-name 'vault_sftpgo_admin_password' \
+        --encrypt-vault-id default \
+        >> inventory/prod/group_vars/all/vault.yml
+  when: sftpgo_admin_password in ['changeme', '', None]
+
+- name: Garantir que o volume de dados existe
+  community.docker.docker_volume:
+    name: "{{ sftpgo_volume_name }}"
+    state: present
+
+- name: Subir container SFTP Go {{ sftpgo_version }}
+  community.docker.docker_container:
+    name: "{{ sftpgo_container_name }}"
+    image: "{{ sftpgo_image }}:{{ sftpgo_version }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      # SFTP — bind 127.0.0.1; exposição tailnet pelo socat sidecar.
+      - "127.0.0.1:{{ sftpgo_sftp_port }}:2022"
+      # Web admin/API — bind 127.0.0.1; exposição pública via Nginx vhost.
+      # Porta interna do container é sempre 8080; remapeamos para
+      # sftpgo_http_port (8083) no host porque 8080 é do headscale.
+      - "127.0.0.1:{{ sftpgo_http_port }}:8080"
+    env:
+      # HTTP server (web admin + API REST) — sempre escuta em 8080 dentro do container.
+      SFTPGO_HTTPD__BINDINGS__0__PORT: "8080"
+      SFTPGO_HTTPD__BINDINGS__0__ADDRESS: "0.0.0.0"
+      # SFTP server — sempre escuta em 2022 dentro do container.
+      SFTPGO_SFTPD__BINDINGS__0__PORT: "2022"
+      SFTPGO_SFTPD__BINDINGS__0__ADDRESS: "0.0.0.0"
+      # Data provider: SQLite local no volume (sem dependência de postgres).
+      SFTPGO_DATA_PROVIDER__DRIVER: "sqlite"
+      SFTPGO_DATA_PROVIDER__NAME: "/var/lib/sftpgo/sftpgo.db"
+      # Logging
+      SFTPGO_LOG_LEVEL: "{{ sftpgo_log_level }}"
+      TZ: "{{ sftpgo_timezone }}"
+    volumes:
+      - "{{ sftpgo_volume_name }}:/var/lib/sftpgo"
+    networks:
+      - name: "{{ docker_network_name }}"
+    security_opts:
+      - "no-new-privileges:true"
+    # Healthcheck via endpoint público /healthz do HTTP server.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+- name: Aguardar SFTP Go responder em 127.0.0.1:{{ sftpgo_http_port }}
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ sftpgo_http_port }}"
+    delay: 2
+    timeout: 60
+    msg: "SFTP Go não respondeu na porta {{ sftpgo_http_port }} em 60s"
+
+- name: Exibir resumo do SFTP Go
+  debug:
+    msg:
+      - "============================================"
+      - "  SFTP Go provisionado"
+      - "============================================"
+      - "  Container : {{ sftpgo_container_name }} ({{ sftpgo_image }}:{{ sftpgo_version }})"
+      - "  Web (local) : http://127.0.0.1:{{ sftpgo_http_port }}"
+      - "  SFTP (local): 127.0.0.1:{{ sftpgo_sftp_port }}"
+      - "--------------------------------------------"
+      - "  Próximos passos:"
+      - "  1. Expor SFTP via tailnet (já incluído em setup_sftpgo.yml):"
+      - "     -> role sftpgo_tailnet_proxy escuta em 100.64.0.1:2022"
+      - "  2. Criar vhost tailnet-only para o web admin:"
+      - "     ansible-playbook playbooks/setup_app.yml \\"
+      - "       -e 'app_name=sftpgo app_domain=sftp.aerobi.com.br \\"
+      - "           app_port={{ sftpgo_http_port }} vhost_websocket_enabled=true \\"
+      - "           vhost_tailnet_only=true vhost_client_max_body_size=5g'"
+      - "  3. Acessar https://sftp.aerobi.com.br/web/admin/setup (de cliente tailnet):"
+      - "     Username : {{ sftpgo_admin_username }}"
+      - "     Email    : {{ sftpgo_admin_email }}"
+      - "     Password : (vault_sftpgo_admin_password)"
+      - "============================================"

@@ -1,0 +1,113 @@
+---
+# Playbook: setup_sftpgo.yml
+#
+# Provisiona o SFTP Go (servidor SFTP em Go com web admin) na VPS:
+#   1. Garante rede docker warpgate
+#   2. Sobe o container SFTP Go (web admin em 127.0.0.1:8083, SFTP em 127.0.0.1:2022)
+#   3. Sobe sidecar socat expondo SFTP em 100.64.0.1:2022 (tailnet-only)
+#
+# Vhost HTTPS (sftp.aerobi.com.br) é criado separadamente via setup_app.yml —
+# instruções no resumo final do playbook.
+#
+# PRÉ-REQUISITOS:
+#   1. setup_vps.yml executado (Docker, Nginx, Tailscale client)
+#   2. DNS no Registro.br: sftp.aerobi.com.br → A → 187.127.6.20
+#   3. Vault configurado com a seguinte variável:
+#        vault_sftpgo_admin_password — senha do admin do web UI
+#
+# Como gerar e adicionar a senha admin ao vault:
+#   echo -n "$(openssl rand -base64 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_sftpgo_admin_password' \
+#     --encrypt-vault-id default \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+# Uso:
+#   ansible-playbook -i inventory/prod playbooks/setup_sftpgo.yml
+#
+# Após execução:
+#   1. Criar vhost tailnet-only com TLS:
+#        ansible-playbook playbooks/setup_app.yml \
+#          -e "app_name=sftpgo app_domain=sftp.aerobi.com.br app_port=8083 \
+#              vhost_websocket_enabled=true vhost_tailnet_only=true \
+#              vhost_client_max_body_size=5g"
+#   2. De um dispositivo na tailnet (tailscale up):
+#      a. Acessar https://sftp.aerobi.com.br/web/admin/setup
+#      b. Username: admin, Email: deploy_email, Password: vault_sftpgo_admin_password
+#      c. Criar users SFTP via web admin (root dir sempre em
+#         /var/lib/sftpgo/users/<username>/)
+#   3. Conectar SFTP:
+#        sftp -P 2022 <username>@100.64.0.1
+
+- name: Provisionar SFTP Go (container + tailnet proxy)
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar variáveis obrigatórias
+      fail:
+        msg: >
+          A variável '{{ item }}' é obrigatória.
+          Adicione ao inventory ou vault:
+          ansible-vault edit inventory/prod/group_vars/all/vault.yml
+      when: vars[item] | default('') == ''
+      loop:
+        - sftpgo_domain
+        - vault_sftpgo_admin_password
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  Provisionando SFTP Go"
+          - "============================================"
+          - "  Domínio    : {{ sftpgo_domain }}"
+          - "  Web port   : {{ sftpgo_http_port | default(8083) }} (host 127.0.0.1)"
+          - "  SFTP port  : {{ sftpgo_sftp_port | default(2022) }} (host 127.0.0.1)"
+          - "  Tailnet IP : {{ sftpgo_tailnet_proxy_listen_ip | default('100.64.0.1') }}:{{ sftpgo_tailnet_proxy_listen_port | default(2022) }}"
+          - "  Container  : {{ sftpgo_container_name | default('sftpgo') }}"
+          - "  Rede       : {{ docker_network_name }}"
+          - "============================================"
+
+  roles:
+    - role: docker_network
+    - role: sftpgo
+    - role: sftpgo_tailnet_proxy
+
+  post_tasks:
+    - name: Verificar saúde do container SFTP Go
+      community.docker.docker_container_info:
+        name: "{{ sftpgo_container_name | default('sftpgo') }}"
+      register: sftpgo_info
+
+    - name: Exibir status do container
+      debug:
+        msg: "Status: {{ sftpgo_info.container.State.Status }} | Health: {{ sftpgo_info.container.State.Health.Status | default('N/A') }}"
+
+    - name: Exibir resumo final
+      debug:
+        msg:
+          - "============================================"
+          - "  SFTP Go provisionado com sucesso!"
+          - "============================================"
+          - "  Web (host)   : http://127.0.0.1:{{ sftpgo_http_port | default(8083) }}"
+          - "  SFTP (tailnet): {{ sftpgo_tailnet_proxy_listen_ip | default('100.64.0.1') }}:{{ sftpgo_tailnet_proxy_listen_port | default(2022) }}"
+          - "============================================"
+          - "  Próximos passos:"
+          - "  1. Criar vhost HTTPS tailnet-only (de fora deste playbook):"
+          - "     ansible-playbook playbooks/setup_app.yml \\"
+          - "       -e 'app_name=sftpgo app_domain={{ sftpgo_domain }} \\"
+          - "           app_port={{ sftpgo_http_port | default(8083) }} \\"
+          - "           vhost_websocket_enabled=true vhost_tailnet_only=true \\"
+          - "           vhost_client_max_body_size=5g'"
+          - ""
+          - "  2. Setup inicial do admin (one-time):"
+          - "     - Conecte um cliente à tailnet (tailscale up)"
+          - "     - Acesse https://{{ sftpgo_domain }}/web/admin/setup"
+          - "     - User: {{ sftpgo_admin_username | default('admin') }}"
+          - "     - Email: {{ sftpgo_admin_email | default(deploy_email) }}"
+          - "     - Password: vault_sftpgo_admin_password"
+          - ""
+          - "  3. Criar usuários SFTP via web admin:"
+          - "     - Home dir sempre em /var/lib/sftpgo/users/<username>/"
+          - "     - Conectar: sftp -P 2022 <user>@{{ sftpgo_tailnet_proxy_listen_ip | default('100.64.0.1') }}"
+          - "============================================"

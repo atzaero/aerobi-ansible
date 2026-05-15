@@ -1,0 +1,37 @@
+---
+# Role: sftpgo_tailnet_proxy
+#
+# Sobe um sidecar socat (network_mode: host) que escuta em
+# <IP_TAILNET_VPS>:2022 e faz forward para 127.0.0.1:2022 (onde o
+# SFTP Go já bind). Permite que clientes da tailnet (Filezilla, sftp CLI)
+# conectem direto sem expor a porta SFTP publicamente.
+#
+# Mesmo padrão do postgres_tailnet_proxy. Ver comentário lá para
+# justificativa de network_mode: host (Docker NAT bypass UFW).
+
+# ------------------------------------------------------------
+# Imagem e container
+# ------------------------------------------------------------
+# Pin explícito. Atualizar revisando https://hub.docker.com/r/alpine/socat
+# Validar com `docker manifest inspect alpine/socat:<tag>` antes de pinar.
+sftpgo_tailnet_proxy_image: alpine/socat
+sftpgo_tailnet_proxy_version: "1.8.0.3"
+sftpgo_tailnet_proxy_container_name: sftpgo_tailnet_proxy
+
+# ------------------------------------------------------------
+# Endereço de bind
+# ------------------------------------------------------------
+# IP da VPS na tailnet — descobrir com `tailscale ip -4` na VPS.
+# Em prod aerobi: 100.64.0.1.
+# Não usar 0.0.0.0 — escutaria também em eth0 e exporia SFTP
+# pra internet pública.
+sftpgo_tailnet_proxy_listen_ip: "100.64.0.1"
+sftpgo_tailnet_proxy_listen_port: 2022
+
+# ------------------------------------------------------------
+# Backend (SFTP Go no host)
+# ------------------------------------------------------------
+# SFTP Go já escuta em 127.0.0.1:2022 via docker_container do role
+# sftpgo. Não mudar a menos que o bind do sftpgo mude.
+sftpgo_tailnet_proxy_backend_host: "127.0.0.1"
+sftpgo_tailnet_proxy_backend_port: 2022
