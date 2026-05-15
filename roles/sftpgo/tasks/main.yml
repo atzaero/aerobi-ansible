@@ -65,9 +65,11 @@
       - name: "{{ docker_network_name }}"
     security_opts:
       - "no-new-privileges:true"
-    # Healthcheck via endpoint público /healthz do HTTP server.
+    # Healthcheck via subcomando `sftpgo ping` (bate em /healthz).
+    # Imagem oficial é distroless — não tem curl/wget/nc. O próprio
+    # binário traz `ping` justamente pra este caso (ver `sftpgo ping --help`).
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      test: ["CMD", "sftpgo", "ping"]
       interval: 30s
       timeout: 5s
       retries: 3
