@@ -33,11 +33,12 @@ Procedimento detalhado: [`REGISTRO_BR.md`](REGISTRO_BR.md).
 | `s3` | A | `187.127.6.20` | 3600 |
 | `s3-console` | A | `187.127.6.20` | 3600 |
 | `status` | A | `187.127.6.20` | 3600 |
+| `sftp` | A | `187.127.6.20` | 3600 |
 
 ### Validar propagação
 
 ```bash
-for sub in api vault headscale s3 s3-console status; do
+for sub in api vault headscale s3 s3-console status sftp; do
   echo -n "$sub.aerobi.com.br → "
   dig +short "$sub.aerobi.com.br" @1.1.1.1
 done
@@ -259,9 +260,52 @@ ansible-playbook playbooks/setup_app.yml \
 
 Cria vhost + cert para `api.aerobi.com.br`. O container `aerobi-api` em si é deployado via GitHub Actions (fora do escopo deste runbook).
 
-## Passo 9 — Validação final
+## Passo 9 — SFTP Go (file transfer tailnet-only)
 
-### 9.1 — Containers rodando
+Pré-requisito: `vault_sftpgo_admin_password` definido no vault (mesmo procedimento do Valkey):
+
+```bash
+echo -n "$(openssl rand -base64 32)" | \
+  ansible-vault encrypt_string --stdin-name 'vault_sftpgo_admin_password' \
+  --vault-id default@~/.ansible-vault/aerobi-prod \
+  >> inventory/prod/group_vars/all/vault.yml
+```
+
+### 9.1 — Container + sidecar socat tailnet
+
+```bash
+ansible-playbook playbooks/setup_sftpgo.yml
+```
+
+Sobe SFTP Go (versão pinada — ver `roles/sftpgo/defaults/main.yml`) em `127.0.0.1:8083` (web admin) e `127.0.0.1:2022` (SFTP). Sidecar socat expõe SFTP em `100.64.0.1:2022` via tailnet (mesmo padrão do `postgres_tailnet_proxy`).
+
+### 9.2 — Vhost (tailnet-only com WebSocket)
+
+`vhost_client_max_body_size=5g` cobre uploads grandes (gravações de câmeras do edge).
+
+```bash
+ansible-playbook playbooks/setup_app.yml \
+  -e "app_name=sftpgo app_domain=sftp.aerobi.com.br app_port=8083 \
+      vhost_websocket_enabled=true vhost_tailnet_only=true \
+      vhost_client_max_body_size=5g"
+```
+
+### 9.3 — Setup do admin (one-time)
+
+Com `tailscale up` no laptop, abrir `https://sftp.aerobi.com.br/web/admin/setup` e fornecer a senha:
+
+```bash
+ansible localhost -m debug -a "var=vault_sftpgo_admin_password" \
+  -e "@inventory/prod/group_vars/all/vault.yml" --connection=local
+```
+
+User `admin`, email do `deploy_email`. Após criar, o endpoint `/setup` retorna 404 — login normal em `/web/admin`.
+
+Próximos passos (criar users SFTP, conectar via Filezilla/CLI, backup): ver [`roles/sftpgo/README.md`](../roles/sftpgo/README.md).
+
+## Passo 10 — Validação final
+
+### 10.1 — Containers rodando
 
 ```bash
 ssh deploy@187.127.6.20 "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
@@ -270,19 +314,24 @@ ssh deploy@187.127.6.20 "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.P
 Esperado:
 
 ```
-NAMES         STATUS          PORTS
-postgres      Up X (healthy)  127.0.0.1:5432->5432
-headscale     Up X (healthy)  127.0.0.1:8080->8080
-vaultwarden   Up X (healthy)  127.0.0.1:3010->80/tcp
-valkey        Up X (healthy)  127.0.0.1:6379->6379
-minio         Up X (healthy)  127.0.0.1:9000->9000, 127.0.0.1:9001->9001
-uptime_kuma   Up X (healthy)  127.0.0.1:3001->3001
-aerobi-api    Up X (healthy)  127.0.0.1:3333->3333
+NAMES                   STATUS          PORTS
+postgres                Up X (healthy)  127.0.0.1:5432->5432
+postgres_tailnet_proxy  Up X (healthy)
+headscale               Up X (healthy)  127.0.0.1:8080->8080
+vaultwarden             Up X (healthy)  127.0.0.1:3010->80/tcp
+valkey                  Up X (healthy)  127.0.0.1:6379->6379
+minio                   Up X (healthy)  127.0.0.1:9000->9000, 127.0.0.1:9001->9001
+uptime_kuma             Up X (healthy)  127.0.0.1:3001->3001
+sftpgo                  Up X (healthy)  127.0.0.1:8083->8080, 127.0.0.1:2022->2022
+sftpgo_tailnet_proxy    Up X (healthy)
+aerobi-api              Up X (healthy)  127.0.0.1:3333->3333
 ```
+
+Containers com `network_mode: host` (postgres_tailnet_proxy, sftpgo_tailnet_proxy) não mostram mapeamento de portas — escutam direto na interface `tailscale0` do host.
 
 Se algum não estiver `healthy`: `docker logs <nome>` no servidor para triar.
 
-### 9.2 — TLS + exposição correta
+### 10.2 — TLS + exposição correta
 
 ```bash
 # Públicos (esperar 200/redirect):
@@ -296,13 +345,26 @@ done
 
 # Tailnet-only (sem tailscale → 403):
 for url in https://s3-console.aerobi.com.br \
-          https://status.aerobi.com.br; do
+          https://status.aerobi.com.br \
+          https://sftp.aerobi.com.br; do
   echo -n "$url (sem tailscale) → "
   curl -sI "$url" | head -1
 done
 ```
 
 Com `tailscale up` no laptop, repetir os tailnet-only — devem retornar 200/302.
+
+### 10.3 — Tailnet (SFTP + Postgres via socat)
+
+Da máquina dev com `tailscale up`:
+
+```bash
+# Postgres acessível via tailnet
+pg_isready -h 100.64.0.1 -p 5432
+
+# SFTP Go acessível via tailnet (espera prompt de senha do admin do SFTP Go)
+nc -zv 100.64.0.1 2022
+```
 
 ## Troubleshooting
 
@@ -315,6 +377,8 @@ Com `tailscale up` no laptop, repetir os tailnet-only — devem retornar 200/302
 | Vaultwarden retorna 502 | Container não conectou ao postgres | `docker logs vaultwarden` — provável senha errada (regerou DB sem regerar container) |
 | `/admin` do Vaultwarden retorna 403 | Sem tailscale | `tailscale up` no laptop |
 | s3-console fica em loading loop | Vhost sem `vhost_websocket_enabled` | Reaplicar `setup_app.yml` com a flag |
+| `sftp: Connection refused` em `100.64.0.1:2022` | Container `sftpgo_tailnet_proxy` parado ou VPS off-tailnet | `docker ps` no servidor; conferir `tailscale status` |
+| Upload SFTP grande trava em ~50% | Vhost sem `vhost_client_max_body_size=5g` (afeta API REST do SFTP Go) | Reaplicar `setup_app.yml` com a flag |
 | Decryption falha (`VAULT_FAILED`) | Master errada em `~/.ansible-vault/aerobi-prod` | Conferir master correta |
 
 Para incidentes mais sérios (suspeita de comprometimento, comportamento estranho), ver [`INCIDENT_RESPONSE.md`](INCIDENT_RESPONSE.md).
@@ -323,6 +387,6 @@ Para incidentes mais sérios (suspeita de comprometimento, comportamento estranh
 
 - Deploy do app `aerobi-api` em si (build + push da imagem) — feito via GitHub Actions de [`atzaero/aerobi-api`](https://github.com/atzaero/aerobi-api). `setup_app.yml` cria só o vhost.
 - Backup automatizado do Postgres + volumes (issue futura — backup para `aerobi-prod-backups` no MinIO).
-- Postgres acessível via tailnet sem SSH tunnel (issue [#7](https://github.com/atzaero/aerobi-ansible/issues/7) — Docker bypassa UFW).
+- Postgres acessível via tailnet sem SSH tunnel (issue [#7](https://github.com/atzaero/aerobi-ansible/issues/7) — Docker bypassa UFW). Mesma técnica usada no SFTP Go (`roles/sftpgo_tailnet_proxy/`).
 - Aerodrome edge (Raspberry Pi como subnet router Tailscale) — separado em `playbooks/setup_aerodrome.yml`.
 - Replicação/HA — fora de escopo do baseline.

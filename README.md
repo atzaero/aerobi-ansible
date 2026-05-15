@@ -32,7 +32,7 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `valkey` | Fork OSS do Redis (cache/filas/sessões) | `roles/valkey/README.md` |
 | `minio` | Object storage S3-compatible + buckets declarativos | `roles/minio/README.md` |
 | `uptime_kuma` | Status + monitoring + Domain Name Expiry | `roles/uptime_kuma/README.md` |
-| `sftpgo` | Servidor SFTP em Go com web admin (SQLite, tailnet-only) | |
+| `sftpgo` | Servidor SFTP em Go com web admin (SQLite, tailnet-only) | `roles/sftpgo/README.md` |
 | `sftpgo_tailnet_proxy` | Sidecar socat — expõe SFTP em `100.64.0.1:2022` via tailnet | |
 | `mediamtx` | RTSP→HLS fan-out (câmeras IP, edge) | |
 | `aerodrome_edge` | Raspberry Pi como subnet router Tailscale | |
@@ -102,12 +102,13 @@ ansible-playbook playbooks/setup_database.yml
 ansible-playbook playbooks/setup_app_databases.yml
 # 3. Mesh VPN
 ansible-playbook playbooks/setup_headscale.yml
-# 4-7. Serviços
+# 4-8. Serviços
 ansible-playbook playbooks/setup_vaultwarden.yml
 ansible-playbook playbooks/setup_valkey.yml
 ansible-playbook playbooks/setup_minio.yml
 ansible-playbook playbooks/setup_uptime_kuma.yml
-# 8. Vhosts admin-only / públicos
+ansible-playbook playbooks/setup_sftpgo.yml
+# 9. Vhosts admin-only / públicos
 ansible-playbook playbooks/setup_app.yml -e "app_name=... app_domain=... app_port=..."
 ```
 
