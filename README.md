@@ -32,6 +32,8 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `valkey` | Fork OSS do Redis (cache/filas/sessões) | `roles/valkey/README.md` |
 | `minio` | Object storage S3-compatible + buckets declarativos | `roles/minio/README.md` |
 | `uptime_kuma` | Status + monitoring + Domain Name Expiry | `roles/uptime_kuma/README.md` |
+| `sftpgo` | Servidor SFTP em Go com web admin (SQLite, tailnet-only) | |
+| `sftpgo_tailnet_proxy` | Sidecar socat — expõe SFTP em `100.64.0.1:2022` via tailnet | |
 | `mediamtx` | RTSP→HLS fan-out (câmeras IP, edge) | |
 | `aerodrome_edge` | Raspberry Pi como subnet router Tailscale | |
 
@@ -47,6 +49,7 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `setup_valkey.yml` | docker_network → valkey | Cache/filas (sem vhost) |
 | `setup_minio.yml` | docker_network → minio (+ buckets) | Object storage |
 | `setup_uptime_kuma.yml` | docker_network → uptime_kuma | Monitoring (vhost via setup_app.yml) |
+| `setup_sftpgo.yml` | docker_network → sftpgo → sftpgo_tailnet_proxy | Servidor SFTP (vhost via setup_app.yml, tailnet-only) |
 | `setup_app.yml` | nginx_vhost (parametrizado) | Vhost + cert para qualquer app |
 | `setup_aerodrome.yml` | aerodrome_edge (Raspi) | Edge subnet router + mediamtx |
 

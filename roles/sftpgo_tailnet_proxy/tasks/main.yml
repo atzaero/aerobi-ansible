@@ -1,0 +1,85 @@
+---
+# Role: sftpgo_tailnet_proxy
+#
+# Sobe sidecar socat com network_mode: host que escuta no IP da tailnet
+# (default 100.64.0.1:2022) e forward para sftpgo em 127.0.0.1:2022.
+#
+# Por que socat e não Docker port mapping (-p 100.64.0.1:2022:2022):
+# o Docker insere regras na chain DOCKER do iptables que são avaliadas
+# ANTES do UFW. Resultado: bind em 0.0.0.0 ou IP da tailnet vaza pra
+# internet pública mesmo com UFW configurado para bloquear (issue #7).
+#
+# Com network_mode: host, o container compartilha a rede do host —
+# socat escuta direto na interface tailscale0, sem iptables NAT do
+# Docker. UFW filtra normalmente (ufw_allow_tailscale_interface=true
+# já libera tailscale0 inteira).
+#
+# Pré-requisitos:
+#   - SFTP Go rodando em 127.0.0.1:2022 (role: sftpgo)
+#   - VPS conectada à tailnet (role: tailscale_client)
+#
+# Aplicar (incluído no playbook setup_sftpgo.yml):
+#   ansible-playbook playbooks/setup_sftpgo.yml
+#
+# Validar (de qualquer cliente na tailnet, com tailscale up):
+#   sftp -P 2022 admin@100.64.0.1
+#   nc -zv 100.64.0.1 2022
+
+- name: Validar listen_ip está dentro do range CGNAT da tailnet
+  fail:
+    msg: >
+      sftpgo_tailnet_proxy_listen_ip ({{ sftpgo_tailnet_proxy_listen_ip }})
+      precisa estar no range 100.64.0.0/10 da tailnet.
+      Confirme com `tailscale ip -4` na VPS.
+  when: not (sftpgo_tailnet_proxy_listen_ip is match('^100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.'))
+
+- name: Subir sidecar socat (sftpgo tailnet proxy) {{ sftpgo_tailnet_proxy_version }}
+  community.docker.docker_container:
+    name: "{{ sftpgo_tailnet_proxy_container_name }}"
+    image: "{{ sftpgo_tailnet_proxy_image }}:{{ sftpgo_tailnet_proxy_version }}"
+    state: started
+    restart_policy: unless-stopped
+    # network_mode: host — container compartilha namespace de rede do host.
+    # Necessário pra escutar diretamente em tailscale0 (sem iptables NAT
+    # do Docker que bypass UFW).
+    network_mode: host
+    # Argumentos do socat: TCP-LISTEN em IP:porta da tailnet, fork (1
+    # processo por conexão), reuseaddr (não bloqueia restart com TIME_WAIT),
+    # forward TCP para sftpgo em 127.0.0.1.
+    command:
+      - "TCP-LISTEN:{{ sftpgo_tailnet_proxy_listen_port }},bind={{ sftpgo_tailnet_proxy_listen_ip }},fork,reuseaddr"
+      - "TCP:{{ sftpgo_tailnet_proxy_backend_host }}:{{ sftpgo_tailnet_proxy_backend_port }}"
+    security_opts:
+      - "no-new-privileges:true"
+    # Healthcheck: socat não tem comando próprio. Usar /bin/sh + nc para
+    # verificar se a porta de listen está aberta. Se falhar, container
+    # restart pega de volta.
+    healthcheck:
+      test: ["CMD", "/bin/sh", "-c", "nc -z {{ sftpgo_tailnet_proxy_listen_ip }} {{ sftpgo_tailnet_proxy_listen_port }}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+- name: Aguardar socat responder em {{ sftpgo_tailnet_proxy_listen_ip }}:{{ sftpgo_tailnet_proxy_listen_port }}
+  wait_for:
+    host: "{{ sftpgo_tailnet_proxy_listen_ip }}"
+    port: "{{ sftpgo_tailnet_proxy_listen_port }}"
+    delay: 2
+    timeout: 30
+    msg: "Socat não respondeu em {{ sftpgo_tailnet_proxy_listen_ip }}:{{ sftpgo_tailnet_proxy_listen_port }} em 30s"
+
+- name: Exibir resumo sftpgo_tailnet_proxy
+  debug:
+    msg:
+      - "============================================"
+      - "  SFTP Go acessível via tailnet"
+      - "============================================"
+      - "  Listen   : {{ sftpgo_tailnet_proxy_listen_ip }}:{{ sftpgo_tailnet_proxy_listen_port }}"
+      - "  Backend  : {{ sftpgo_tailnet_proxy_backend_host }}:{{ sftpgo_tailnet_proxy_backend_port }}"
+      - "  Versão   : socat {{ sftpgo_tailnet_proxy_version }}"
+      - "--------------------------------------------"
+      - "  Conectar (com tailscale up no cliente):"
+      - "    sftp -P 2022 admin@{{ sftpgo_tailnet_proxy_listen_ip }}"
+      - "    Filezilla: Host=sftp://{{ sftpgo_tailnet_proxy_listen_ip }}, Port=2022"
+      - "============================================"

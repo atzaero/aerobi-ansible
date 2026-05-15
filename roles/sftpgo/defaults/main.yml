@@ -1,0 +1,42 @@
+---
+# Defaults: sftpgo
+#
+# Valores padrão seguros para produção.
+# Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
+
+# Imagem pinada — bumpar revisando https://github.com/drakkan/sftpgo/releases.
+# Major bumps podem exigir migração do data provider; ler release notes antes.
+# Validar com `docker manifest inspect drakkan/sftpgo:<tag>` antes de aplicar.
+sftpgo_image: drakkan/sftpgo
+sftpgo_version: "v2.7.1"
+
+sftpgo_container_name: sftpgo
+
+# Portas (bind no host)
+# SFTP — exposto via sidecar socat em 100.64.0.1:2022 (role sftpgo_tailnet_proxy).
+# Bind em 127.0.0.1 garante que Docker NAT não vaze para internet pública.
+sftpgo_sftp_port: 2022
+# Web UI/API — porta 8080 está ocupada pelo headscale na VPS prod, então
+# mapeamos a porta interna 8080 do container para 8083 no host.
+sftpgo_http_port: 8083
+
+# Storage
+# Volume Docker persistente — contém:
+#   - sqlite db (sftpgo.db) com users/folders/configs
+#   - ssh host keys gerados na primeira inicialização
+#   - uploads dos users em /var/lib/sftpgo/users/<username>/
+sftpgo_volume_name: sftpgo_data
+
+# Logging
+sftpgo_log_level: "info"           # debug | info | warn | error
+sftpgo_timezone: "America/Sao_Paulo"
+
+# Admin (criação via wizard /web/admin/setup após primeira execução)
+sftpgo_admin_username: admin
+sftpgo_admin_email: "{{ deploy_email | default('') }}"
+# OBRIGATÓRIO sobrescrever via vault (vault_sftpgo_admin_password).
+# Validação fail-fast no tasks/main.yml.
+sftpgo_admin_password: changeme
+
+# Rede Docker compartilhada (criada pela role docker_network).
+docker_network_name: warpgate

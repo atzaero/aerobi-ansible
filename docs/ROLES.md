@@ -171,3 +171,56 @@ ansible-vault encrypt_string --vault-id default@~/.ansible-vault/prod \
 
 **Por que importa:**
 É o que efetivamente coloca a VPS na tailnet. Sem ele, o Headscale roda mas não tem clientes.
+
+---
+
+## sftpgo
+
+**Tag:** `sftpgo`
+
+**O que faz:**
+- Sobe `drakkan/sftpgo:v2.7.1` em container Docker (`restart_policy: unless-stopped`, `no-new-privileges`)
+- Bind `127.0.0.1:8083` (web admin/API) e `127.0.0.1:2022` (SFTP server) — porta interna 8080 do container é remapeada para 8083 no host (8080 é do Headscale)
+- Data provider SQLite em volume `sftpgo_data` (contém DB, host keys SSH, uploads dos users em `/var/lib/sftpgo/users/<user>/`)
+- Healthcheck via `GET /healthz`
+- Valida `sftpgo_admin_password` não está em `changeme` (fail-fast)
+
+**Por que importa:**
+Servidor SFTP modernizado com web admin — substitui SSH-as-SFTP (sshd) para casos onde precisamos isolar users SFTP do sistema (chroot, quotas, multi-tenancy). Usado pelo edge do aeródromo para subir gravações ou trocar arquivos com a equipe.
+
+**Pré-requisitos:**
+- `vault_sftpgo_admin_password` no vault
+- Rede docker `warpgate` (role `docker_network`)
+- DNS `sftp.aerobi.com.br` → IP da VPS
+
+**Setup inicial do admin (one-time):**
+```bash
+# 1. Pegar a senha no vault
+ansible localhost -m debug -a "var=vault_sftpgo_admin_password" \
+  -e "@inventory/prod/group_vars/all/vault.yml" --connection=local
+
+# 2. De um cliente na tailnet (tailscale up), abrir:
+#    https://sftp.aerobi.com.br/web/admin/setup
+#    Username: admin
+#    Email: deploy_email
+#    Password: (output do comando acima)
+```
+
+---
+
+## sftpgo_tailnet_proxy
+
+**Tag:** `sftpgo_tailnet_proxy`
+
+**O que faz:**
+- Sobe `alpine/socat:1.8.0.3` em container Docker com `network_mode: host`
+- Escuta em `100.64.0.1:2022` (tailnet) e forward TCP para `127.0.0.1:2022` (SFTP Go)
+- Healthcheck via `nc -z 100.64.0.1 2022`
+
+**Por que importa:**
+Permite que clientes SFTP na tailnet conectem direto via `sftp -P 2022 <user>@100.64.0.1` sem expor a porta 2022 publicamente. Mesmo padrão do `postgres_tailnet_proxy` (issue #7) — socat com `network_mode: host` é a única forma de escutar em IP de tailnet sem o Docker NAT bypass do UFW.
+
+**Pré-requisitos:**
+- SFTP Go rodando em `127.0.0.1:2022` (role `sftpgo`)
+- VPS conectada à tailnet (role `tailscale_client`)
+- `ufw_allow_tailscale_interface: true` (já default em prod)
