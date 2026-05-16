@@ -56,7 +56,9 @@ Endpoints administrativos não devem ficar expostos publicamente. O padrão da p
 
 ### Como aplicar em novo serviço admin
 
-No `setup_app.yml`, passar `vhost_tailnet_only=true`:
+**Dois passos obrigatórios.** Falta de qualquer um deixa o serviço acessível externamente ou retornando 403 da tailnet.
+
+**1. Vhost com `vhost_tailnet_only=true`**
 
 ```bash
 ansible-playbook playbooks/setup_app.yml \
@@ -72,3 +74,11 @@ deny all;
 ```
 
 Combinar com `vhost_websocket_enabled=true` se a UI usa WebSocket (MinIO console, Uptime Kuma).
+
+**2. Magic DNS no Headscale (extra_records)**
+
+Adicionar entrada em `headscale_extra_dns_records` em [`roles/headscale/defaults/main.yml`](../roles/headscale/defaults/main.yml) apontando o subdomínio para `100.64.0.1`. Reaplicar `setup_headscale.yml`.
+
+Sem isso, o cliente resolve o subdomínio para o IP público (`187.127.6.20`), o tráfego sai pela internet em vez da tailnet, e o nginx vê o IP público em `remote_addr` → **403 mesmo com tailscale up**.
+
+Esta etapa é tão obrigatória quanto a primeira. Procedimento completo em [`DOMINIOS.md → Adicionar um serviço de infra novo`](DOMINIOS.md#adicionar-um-serviço-de-infra-novo) e mecanismo explicado em [`VPN.md → Magic DNS e extra_records`](VPN.md#magic-dns-e-extra_records).
