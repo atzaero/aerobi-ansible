@@ -118,6 +118,9 @@ get_existing_item_id() {
 ensure_collection() {
   # Cria a Collection se não existir, mantendo idempotência.
   # Requer que o user logado seja owner/admin da org.
+  #
+  # Constrói o JSON do zero (sem usar `bw get template` que vem com
+  # placeholder de group inválido — causa "Invalid member" no servidor).
   local org_id="$1" coll_name="$2"
   local existing_id
   existing_id=$(get_collection_id "$org_id" "$coll_name")
@@ -127,15 +130,24 @@ ensure_collection() {
   fi
 
   info "Criando Collection '$coll_name' na org"
-  bw get template org-collection \
-    | jq --arg org "$org_id" --arg name "$coll_name" '
-        .organizationId = $org
-        | .name = $name
-        | .externalId = null
-        | .groups = []' \
-    | bw encode \
-    | bw create org-collection --organizationid "$org_id" >/dev/null \
-    || err "Falha ao criar Collection '$coll_name'. Confirme que seu user é owner/admin da org."
+
+  local payload
+  payload=$(jq -nc \
+    --arg org "$org_id" \
+    --arg name "$coll_name" \
+    '{
+      organizationId: $org,
+      name: $name,
+      externalId: null,
+      groups: [],
+      users: []
+    }')
+
+  # Tenta criar. Captura stderr+stdout para diagnóstico se falhar.
+  local create_output
+  if ! create_output=$(echo "$payload" | bw encode | bw create org-collection --organizationid "$org_id" 2>&1); then
+    err "Falha ao criar Collection '$coll_name'.\n  Output do bw: $create_output\n  JSON enviado: $payload\n  Diagnóstico:\n    bw get template org-collection   # ver template atual\n    bw list collections --organizationid $org_id   # ver collections já existentes"
+  fi
 
   bw sync >/dev/null
   ok "Collection criada: '$coll_name'"
