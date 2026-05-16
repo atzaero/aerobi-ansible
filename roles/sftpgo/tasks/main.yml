@@ -56,6 +56,11 @@
       # Data provider: SQLite local no volume (sem dependência de postgres).
       SFTPGO_DATA_PROVIDER__DRIVER: "sqlite"
       SFTPGO_DATA_PROVIDER__NAME: "/var/lib/sftpgo/sftpgo.db"
+      # Base dir dos home dirs de users — quando criar um user sem home_dir
+      # explícito, o SFTP Go usa <base>/<username>. Sem essa env var, o
+      # default cai em /srv/sftpgo/data/ (fora do volume) — uploads ficam
+      # no layer efêmero do container e somem no próximo docker rm.
+      SFTPGO_DATA_PROVIDER__USERS_BASE_DIR: "/var/lib/sftpgo/users"
       # Logging
       SFTPGO_LOG_LEVEL: "{{ sftpgo_log_level }}"
       TZ: "{{ sftpgo_timezone }}"
