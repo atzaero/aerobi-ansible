@@ -672,10 +672,27 @@ Significa que a pre-auth key expirou ou já foi consumida (one-time-use). Gerar 
 - Confirmar via `tailscale status` que ambos os nós estão `idle` ou `active`.
 - ACL pode estar bloqueando — checar [`acl.json.j2`](../roles/headscale/templates/acl.json.j2). Tag `tag:airfield → tag:airfield` é deny por design (aeródromos isolados entre si).
 
-### vault.aerobi.com.br/admin retorna 403 mesmo conectado à tailnet
+### Subdomínio tailnet-only retorna 403 mesmo conectado à tailnet
 
-- Confirmar que `tailscale ip -4` retorna IP no range `100.64.0.0/10`.
-- O cliente pode estar usando "split tunnel" — confirmar que tráfego pra `vault.aerobi.com.br` passa pela tailnet (não pelo gateway local). Em geral basta o IP de origem da requisição estar no range — DNS resolve normal.
+Causa #1 (mais comum): **subdomínio não está em `headscale_extra_dns_records`**. O cliente resolve o domínio para o IP público (`187.127.6.20`) via DNS público, e o tráfego sai pela internet em vez da `tailscale0`. O nginx vê o IP público em `$remote_addr` → bloqueia.
+
+Diagnóstico:
+```bash
+# Esperado em cliente com tailscale up + --accept-dns=true:
+dig +short <sub>.aerobi.com.br @100.100.100.100    # deve retornar 100.64.0.1
+
+# Se retornar 187.127.6.20 → falta entrada em extra_records.
+# Editar roles/headscale/defaults/main.yml e reaplicar setup_headscale.yml.
+```
+
+Causa #2: cliente com `--accept-dns=false`. Reativar:
+```bash
+sudo tailscale set --accept-dns=true
+```
+
+Causa #3: `tailscale ip -4` não retorna IP no range `100.64.0.0/10` — cliente está desconectado da tailnet (`tailscale status` não mostra `vps-prod` ativo).
+
+Ver `Magic DNS e extra_records` abaixo para o mecanismo detalhado.
 
 ### Headscale não responde
 
@@ -687,6 +704,60 @@ docker restart headscale
 ```
 
 ACL inválido é causa comum (Headscale recusa subir). Se mudou `acl.json.j2`, validar JSON antes de aplicar.
+
+### Magic DNS e extra_records
+
+O Headscale tem um servidor DNS interno que distribui resoluções customizadas para os clientes Tailscale conectados (com `--accept-dns=true`, default). Isso é o **Magic DNS** — equivalente self-hosted da feature do Tailscale SaaS.
+
+Configuração fica em [`roles/headscale/defaults/main.yml`](../roles/headscale/defaults/main.yml):
+
+```yaml
+headscale_extra_dns_records:
+  - name: vault.aerobi.com.br
+    type: A
+    value: 100.64.0.1
+  - name: s3-console.aerobi.com.br
+    type: A
+    value: 100.64.0.1
+  - name: status.aerobi.com.br
+    type: A
+    value: 100.64.0.1
+  - name: sftp.aerobi.com.br
+    type: A
+    value: 100.64.0.1
+```
+
+### Por que isso é necessário para vhosts tailnet-only
+
+O bloco nginx `allow 100.64.0.0/10; deny all;` filtra por `$remote_addr` — o IP de origem do TCP. Para o nginx ver um IP CGNAT (`100.64.x.y`), o cliente precisa entrar via interface `tailscale0`, não via internet pública. Isso depende de qual IP o cliente resolve para o domínio:
+
+| DNS resolve para | Rota do cliente | `$remote_addr` no nginx | Resultado |
+| --- | --- | --- | --- |
+| `187.127.6.20` (público) | eth0 do laptop → internet | IP público do laptop | **403** (não está em `100.64.0.0/10`) |
+| `100.64.0.1` (tailnet) | `tailscale0` → VPS | IP CGNAT do laptop | **200** (passa no allow) |
+
+Sem o `extra_records`, mesmo com `tailscale up`, o DNS público resolve para `187.127.6.20` e o cliente nunca usa a tailnet para esse tráfego.
+
+### Quando adicionar uma entrada nova
+
+Sempre que um novo serviço receber `vhost_tailnet_only=true` em `setup_app.yml`. Procedimento completo em [`DOMINIOS.md`](DOMINIOS.md#adicionar-um-serviço-de-infra-novo) (item 5).
+
+Aplicar mudanças em `extra_records` requer:
+
+```bash
+ansible-playbook playbooks/setup_headscale.yml
+```
+
+A role regenera `/etc/headscale/config.yaml` no host, e o handler reinicia o container do Headscale. Clientes pegam a nova entrada nos próximos segundos (sem precisar reconectar).
+
+Validar de um cliente na tailnet:
+
+```bash
+# 100.100.100.100 é o resolver "interno" do Tailscale.
+# Quando --accept-dns=true, queries para domínios cobertos
+# pelo Magic DNS passam por ele.
+dig +short <sub>.aerobi.com.br @100.100.100.100   # esperado: 100.64.0.1
+```
 
 ### Recriar a tailnet do zero (último recurso)
 

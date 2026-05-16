@@ -69,7 +69,32 @@ Sequência (exemplo: Grafana em `monitoring.aerobi.com.br`):
      -e "app_name=grafana app_domain=monitoring.aerobi.com.br app_port=3030"
    ```
 
-5. **Atualizar este doc** com a entrada na tabela "Lista atual" (e [`PORTAS.md`](PORTAS.md) com a porta).
+5. **⚠️ Se `vhost_tailnet_only=true`: registrar no Magic DNS do Headscale**
+
+   Sem esse passo, o cliente resolve o subdomínio para o IP público (`187.127.6.20`), o tráfego sai pela internet em vez da tailnet, e o nginx vê o IP público em `remote_addr` → retorna **403 Forbidden mesmo com `tailscale up`**.
+
+   Editar [`roles/headscale/defaults/main.yml`](../roles/headscale/defaults/main.yml) e acrescentar à lista `headscale_extra_dns_records`:
+   ```yaml
+   headscale_extra_dns_records:
+     # ... entradas existentes ...
+     - name: monitoring.aerobi.com.br
+       type: A
+       value: 100.64.0.1
+   ```
+
+   Reaplicar:
+   ```bash
+   ansible-playbook playbooks/setup_headscale.yml
+   ```
+
+   Validar (de cliente na tailnet):
+   ```bash
+   dig +short monitoring.aerobi.com.br @100.100.100.100   # esperado: 100.64.0.1
+   ```
+
+   Esta etapa é **obrigatória** para todo serviço com `vhost_tailnet_only=true`. Ver detalhes em [`VPN.md → Magic DNS e extra_records`](VPN.md#magic-dns-e-extra_records).
+
+6. **Atualizar este doc** com a entrada na tabela "Lista atual" (e [`PORTAS.md`](PORTAS.md) com a porta).
 
 ## Anti-padrões
 
@@ -87,6 +112,14 @@ vault.187.127.6.20   # NÃO — Let's Encrypt não emite cert para IP
 ```
 admin.api.aerobi.com.br → backend admin sem allow/deny   # NÃO
 ```
+
+❌ **`vhost_tailnet_only=true` sem registrar em `headscale_extra_dns_records`:**
+```
+# vhost configurado, DNS público apontando pra 187.127.6.20, sem entrada
+# em headscale_extra_dns_records → cliente resolve IP público, tráfego
+# sai pela internet, nginx vê IP público → 403 mesmo com tailscale up.
+```
+Os dois passos são complementares: o vhost filtra, o extra DNS record **força o tráfego do cliente a entrar pela tailnet**. Sem o segundo, o primeiro nunca recebe um request com IP CGNAT.
 
 ❌ **Misturar domínio do produto com domínio pessoal:**
 ```
