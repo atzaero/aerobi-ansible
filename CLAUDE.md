@@ -66,6 +66,76 @@ Para um serviço novo com vhost:
 - Se for tailnet-only: extra_records do Headscale **antes** ou **junto** do setup_app.yml (sem isso, vhost retorna 403)
 - SSH para `deploy@187.127.6.20` funcional
 
+## Vault (per-value encryption, não file-level)
+
+Cada secret é um bloco `!vault | $ANSIBLE_VAULT;1.1;AES256` individual encriptado via `ansible-vault encrypt_string`. **Não** é file-level. Consequências práticas:
+
+- **`ansible-vault view <arquivo>` NÃO funciona** — falha com "Input is not vault encrypted data". Use `ansible localhost -m debug -a "var=<nome>" -e "@inventory/prod/group_vars/all/vault.yml" --connection=local` para decriptar um secret.
+- **`ansible-vault rekey` NÃO funciona** — só funcionaria pra file-level. Pra rotacionar a master, gerar nova senha + regerar cada bloco individual + substituir no arquivo.
+- Senha master em `~/.ansible-vault/aerobi-prod`. Não commitada (fora do working tree). `ansible.cfg` aponta via `vault_password_file`.
+
+Header do `inventory/prod/group_vars/all/vault.yml` tem o guia completo (ver/adicionar/atualizar/rotacionar secrets, copiar pro clipboard, etc).
+
+## Gotchas conhecidos
+
+- **NOPASSWD sudoers**: usuário `deploy` precisa de `NOPASSWD:ALL` em `/etc/sudoers.d/deploy`. Allowlist restritiva quebra módulos Ansible que rodam `python3` como root. Ver `roles/user/tasks/main.yml`.
+- **Certbot `--reinstall`**: já configurado em `roles/nginx_vhost/tasks/main.yml`. Sem essa flag, em VPS fresh às vezes o certbot emite cert mas o vhost não recebe `listen 443 ssl;` (race condition). Não remover.
+- **MinIO uid:gid = 1001**: container roda como dono do volume montado. Default 1000:1000; em VPS Hostinger o `deploy` é 1001:1001. Definido em `minio_container_uid/gid` no inventory. Mudar = arquivos em `/data` com owner errado.
+- **Fresh-bootstrap inventory**: VPS recém-formatada não tem `deploy` ainda. Editar `inventory/prod/hosts.yml` temporariamente para `ansible_user: root` + comentar `ansible_become`. Após `setup_vps.yml`, reverter. Runbook detalhado em `docs/BOOTSTRAP.md` Passos 1.3–1.5.
+- **DNS antes de TLS**: `setup_app.yml` roda certbot HTTP-01 — exige DNS A do domínio apontando pro IP da VPS, propagado (`dig +short <sub>.aerobi.com.br @1.1.1.1`). Sem DNS, falha.
+
+## Pre-checks padrão antes de PR
+
+```bash
+# Sintaxe de todos os playbooks
+for p in playbooks/*.yml; do ansible-playbook "$p" --syntax-check; done
+
+# Inventory parseia OK
+ansible-inventory -i inventory/prod --list > /dev/null
+
+# Vault decripta (depois de mudar secrets)
+ansible localhost -m debug -a "var=<nome_secret>" \
+  -e "@inventory/prod/group_vars/all/vault.yml" --connection=local
+```
+
+`syntax-check` cobre maior parte dos erros estruturais (YAML inválido, módulo inexistente, vars não resolvíveis). Não roda tasks; pra validação real, Molecule (`molecule test`) ou apply em VPS dev.
+
+## MCPs disponíveis (usar sem pedir permissão)
+
+- `mcp__github__*` — Issues, PRs, branches no repo `atzaero/aerobi-ansible` e em apps relacionados (`atzaero/aerobi-api`).
+- `mcp__hostinger-aerobi-mcp__*` — DNS (`aerobi.com.br`), VPS Hostinger (`187.127.6.20`), snapshots, firewall. Conta já autenticada.
+- `mcp__context7__*` — docs atualizadas (Ansible modules, Docker, libs específicas). Usar quando precisar de detalhe — não confiar só no treino.
+
+## Notas Claude-específicas
+
+- **Plan mode**: acionar antes de mudanças estruturais grandes (nova role complexa, refactor amplo, adição de serviço). Skip pra edits triviais (typo, ajuste de var).
+- **Agent Explore (`subagent_type=Explore`)**: usar pra pesquisas amplas no codebase (3+ queries) — protege o contexto principal. Pra grep/find pontual de symbol ou file, use Bash direto.
+- **Agent `isolation: worktree`**: precisa que a session Claude tenha iniciado dentro do repo. Confirmar com `git rev-parse --show-toplevel`.
+- **Tools deferidos (MCPs, ferramentas extras)**: usar `ToolSearch` com `select:<nome>` quando precisar de algo não carregado por padrão (ex: `WebFetch`, `TaskCreate`, `mcp__github__*`).
+- **Comandos pesados** (build, test suite, ansible apply em prod): rodar com `run_in_background: true` se demorar > 1 min.
+
+## Coesão com projeto irmão
+
+Este projeto (`aerobi-ansible`) é o sucessor de `~/projects/ansible-vps` (mesmo dono, mesma stack base). Diferenças importantes:
+
+| | ansible-vps (legado) | aerobi-ansible (atual) |
+| --- | --- | --- |
+| Domínio infra | `bytefulcode.tech` (software house) | `aerobi.com.br` |
+| VPN | Tailscale SaaS | Headscale self-hosted (este repo) |
+| Postgres | Compartilhado | Compartilhado + sidecar tailnet (issue #7) |
+| MinIO UID | 1000 (ou herdado) | 1001 explícito (gotcha Hostinger) |
+| Edge nodes | Não havia | `aerodrome_edge` (Raspberry Pi + MediaMTX) |
+
+Padrões compartilhados (mantenha simetria ao alterar):
+
+- Vault per-value encryption + senha master em `~/.ansible-vault/<projeto>`
+- Roles de serviço com `defaults/main.yml`, `tasks/main.yml`, opcional `handlers/`, opcional `README.md`
+- Bind `127.0.0.1` + exposição via nginx_vhost com Certbot `--reinstall`
+- Validação fail-fast de credenciais default (`changeme`)
+- Anti-padrão: nunca expor portas via Docker `-p` em IP público nem tailnet (Docker NAT bypass do UFW)
+
+Ao introduzir feature útil pra ambos: portar manualmente, não automatizar. Os repos divergiram no propósito (legado tem multi-tenant, este tem produto único + edge).
+
 ## Documentação operacional canônica
 
 | Tópico | Arquivo |
