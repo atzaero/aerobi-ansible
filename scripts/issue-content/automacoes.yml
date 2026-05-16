@@ -1,0 +1,2419 @@
+# Backlog de automações operacionais — fonte da verdade versionada.
+#
+# Convenções:
+#   - title: Conventional Commits (feat|fix|chore|research|docs)(escopo): descrição
+#   - labels: sempre [automation, <serviço>, priority-{high|medium|low}]
+#   - milestone: "Automações backlog"
+#   - body: Markdown completo (renderizado pelo GitHub)
+#
+# Aplicar:
+#   ./scripts/create-automation-issues.py --dry-run    # preview
+#   ./scripts/create-automation-issues.py              # cria via gh
+#
+# Idempotente: o script verifica título exato antes de criar.
+
+issues:
+  # ============================================================
+  # Vaultwarden — aerobi-ansible (12 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): backup diário do volume vaultwarden_data no MinIO"
+    labels: [automation, vaultwarden, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Volume `vaultwarden_data` tem o DB com todos os items do cofre da org Aerobi. Hoje sem backup automatizado: perda do volume = perda do cofre. RTO indefinido.
+
+      ## Escopo
+
+      - Cron diário 03:00 na VPS gerando tarball do volume
+      - Upload para bucket `aerobi-prod-backups/vaultwarden/`
+      - Retenção 30 dias (auto-purge via `mc find --older-than`)
+      - Push monitor no Uptime Kuma com URL única — alerta se backup não rodar
+
+      ## Solução proposta
+
+      Script `/home/deploy/scripts/backup-vaultwarden.sh` (esboço em `docs/automacoes/vaultwarden.md`), cron `0 3 * * *` com pipe para Uptime Kuma push em sucesso/falha.
+
+      ## Critério de aceite
+
+      - [ ] Script + crontab provisionados via Ansible (não manual)
+      - [ ] Backup roda diário e aparece no bucket
+      - [ ] Retenção 30d testada
+      - [ ] Restore documentado e testado uma vez
+      - [ ] Uptime Kuma alerta se cron não rodar ou falhar
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #2)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): espelhamento Ansible Vault → Vaultwarden via hook no playbook"
+    labels: [automation, vaultwarden, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje secrets vivem só em `vault.yml` (Ansible). Quando um humano precisa decriptar para usar (DBeaver, mc admin, painel admin), tem que rodar `ansible localhost -m debug` — fricção desnecessária. `scripts/migrate-secrets-to-vaultwarden.sh` faz o bulk inicial; falta o hook para serviços novos.
+
+      ## Escopo
+
+      - Criar `scripts/upsert-vw-item.sh` reutilizável (recebe collection + name + JSON do item)
+      - Adicionar `post_tasks` no padrão das roles que geram credenciais
+      - Source-of-truth continua sendo `vault.yml`; Vaultwarden é mirror
+
+      ## Critério de aceite
+
+      - [ ] Script `upsert-vw-item.sh` idempotente
+      - [ ] Aplicado em pelo menos 1 role nova (próximo serviço provisionado)
+      - [ ] CLAUDE.md atualizado: "ao adicionar role com credencial, adicionar hook de espelhamento"
+      - [ ] `docs/automacoes/vaultwarden.md` atualizado com o padrão
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #1)
+      - `scripts/migrate-secrets-to-vaultwarden.sh` (bulk inicial — já feito)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): audit log de acessos ao /admin → push Discord/Telegram"
+    labels: [automation, vaultwarden, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      `/admin` é a chave do reino: token vazado permite listar users, resetar 2FA, exfiltrar org keys. Sem alertas, descobriríamos comprometimento muito tarde.
+
+      ## Escopo
+
+      - Cron a cada 15min que tail no log `/data/vaultwarden.log` filtrando padrões de acesso `/admin`
+      - Push para webhook Discord ou bot Telegram quando houver hit
+      - Whitelist: IPs da tailnet do operador atual (suprime falso positivo)
+      - Marker de posição (`SINCE_FILE`) para não alertar sobre eventos já reportados
+
+      ## Critério de aceite
+
+      - [ ] Script + cron provisionado via Ansible
+      - [ ] Webhook destino configurado e testado
+      - [ ] Falso positivo de IP whitelisted: 0 alertas em 1 semana
+      - [ ] Documentado em `docs/automacoes/vaultwarden.md`
+
+      ## Esforço / Impacto
+
+      Baixo / Médio (alto se houver incidente)
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #7)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): monitor canário no Uptime Kuma validando DB healthy"
+    labels: [automation, vaultwarden, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      `/alive` retorna 200 mesmo se DB estiver corrompido e nenhum item puder ser lido. Health superficial; precisamos profundidade.
+
+      ## Escopo
+
+      - Criar item `canary-vaultwarden` no cofre com valor fixo `OK-aerobi-canary-v1`
+      - Monitor HTTP(s) Keyword no Uptime Kuma validando esse valor via API
+      - Alerta cobre cenário "DB corrompido silenciosamente"
+
+      ## Critério de aceite
+
+      - [ ] Item canário criado e documentado
+      - [ ] Monitor configurado e visível em status.aerobi.com.br
+      - [ ] Alerta dispara se valor mudar ou DB falhar
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #8)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): script de onboarding automatizado de novo membro (VW + Headscale + SFTPGo)"
+    labels: [automation, vaultwarden, headscale, sftpgo, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Onboarding manual atual: convidar no Vaultwarden, gerar pre-auth key Headscale, criar user SFTP, entregar tudo. Tudo separado, propenso a erro.
+
+      ## Escopo
+
+      Script bash único `scripts/onboard-member.sh <email>`:
+      1. Convida user via `/admin/invite` do Vaultwarden
+      2. Gera pre-auth key Headscale via `docker exec headscale ... preauthkeys create`
+      3. Cria user SFTP via API REST do SFTPGo
+      4. Entrega tudo em `bw send` com expiração 24h
+
+      ## Critério de aceite
+
+      - [ ] Script idempotente (se user já existe, atualiza credenciais)
+      - [ ] Testado com 1 onboarding real
+      - [ ] Documentação em `docs/onboarding.md`
+
+      ## Esforço / Impacto
+
+      Médio / Médio (alto na 1ª contratação)
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): rotação periódica das senhas operacionais via cron"
+    labels: [automation, vaultwarden, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Senhas como `vault_minio_root_password` ou `vault_aerobi_db_password` nunca foram rotacionadas. Risco aumenta com o tempo.
+
+      ## Escopo
+
+      Cron mensal que:
+      1. Gera senha nova (`openssl rand`)
+      2. Atualiza no serviço (psql `ALTER USER`, `mc admin user`, etc.)
+      3. Atualiza `vault.yml` re-encriptando
+      4. Atualiza item correspondente no Vaultwarden
+      5. Reinicia containers que precisam da senha em env var
+
+      Começar pelas 2 mais isoladas: aerobi_db_password e minio_root_password.
+
+      ## Critério de aceite
+
+      - [ ] Script de rotação para `vault_aerobi_db_password` testado em dev
+      - [ ] Idempotente e atomic (rollback se algum passo falhar)
+      - [ ] Documentado: como reverter, como pausar
+      - [ ] Cron rodando em prod
+
+      ## Esforço / Impacto
+
+      Alto / Alto
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): export off-site mensal criptografado"
+    labels: [automation, vaultwarden, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Defesa em profundidade: se VPS + MinIO forem comprometidos, ainda temos exportação criptografada em local separado (laptop pessoal + hardware key + email criptografado).
+
+      ## Escopo
+
+      - Cron mensal local (laptop) faz `bw export --format encrypted_json --password <do-vault>`
+      - Salva em pelo menos 2 destinos off-site (HD externo + cloud pessoal criptografado)
+      - Master password do export armazenada hardware key (YubiKey)
+
+      ## Critério de aceite
+
+      - [ ] Script de export documentado e testado
+      - [ ] 2 destinos off-site configurados
+      - [ ] Procedimento de restore documentado e testado em VPS de teste
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #9)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(aerobi-api): consumir secrets do Vaultwarden em vez de .env"
+    labels: [automation, vaultwarden, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje `aerobi-api` lê secrets de `.env` no disco da VPS. Rotacionar senha = redeploy. Com `bw` ou SDK, lê do Vaultwarden, cache em memória, refresh on signal.
+
+      ## Escopo
+
+      - `aerobi-api` lê secrets via `bw get item <id>` no boot
+      - Cache em memória (Redis/Valkey?) com TTL configurável
+      - Refresh em SIGUSR1 ou endpoint admin
+      - Fallback gracioso para `.env` se Vaultwarden indisponível
+
+      ## Critério de aceite
+
+      - [ ] Implementado no aerobi-api (issue separada lá)
+      - [ ] Testado: rotacionar senha sem redeploy
+      - [ ] Documentado fallback e debugging
+
+      ## Esforço / Impacto
+
+      Alto / Alto (longo prazo: muito alto)
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(ci): GitHub Actions puxa secrets do Vaultwarden em vez de GH Secrets"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje `SSH_PRIVATE_KEY` e outros tokens ficam em GitHub Secrets (duplicação com Vaultwarden). Unificar reduz fontes de verdade.
+
+      ## Escopo
+
+      - Self-hosted runner com acesso à tailnet
+      - Action que faz `bw login` + `bw unlock` + `bw get item`
+      - Trade-off: pipeline depende da VPS online
+
+      ## Critério de aceite
+
+      - [ ] Runner self-hosted provisionado e na tailnet
+      - [ ] Pelo menos 1 secret migrado e testado em deploy real
+      - [ ] Documentado em `docs/GITHUB_ACTIONS.md`
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #6)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): bw serve local para devs (substitui .env.example)"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Devs novos hoje copiam `.env.example` e preenchem manual. Com `bw serve`, ler do Vaultwarden via API local 8087 elimina o passo manual.
+
+      ## Escopo
+
+      - Doc dev: como rodar `bw serve` no laptop
+      - Helper script `dev/load-secrets.sh` que popula `.env` consultando bw serve
+      - Migrar app exemplo para usar o helper
+
+      ## Critério de aceite
+
+      - [ ] Doc no `aerobi-api/docs/` (issue separada lá)
+      - [ ] Helper testado por dev real
+
+      ## Esforço / Impacto
+
+      Baixo / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #10)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(vaultwarden): alerta semanal de senhas fracas ou > 90 dias"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Senhas antigas e/ou fracas viram passivo de segurança. Sem visibilidade hoje.
+
+      ## Escopo
+
+      - Cron semanal que lista items do cofre via `bw list items`
+      - Calcula idade (`revisionDate`) e força (zxcvbn ou regra simples)
+      - Push notification se algum item > 90d ou força < 60 bits
+
+      ## Critério de aceite
+
+      - [ ] Script + cron rodando
+      - [ ] Primeiro relatório validado manualmente
+      - [ ] Critérios de "fraca" justificados em doc
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #11)
+
+  - repo: atzaero/aerobi-ansible
+    title: "research(vaultwarden): sync com hardware key (YubiKey) para credenciais críticas"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Backup físico das credenciais mais críticas (admin root, ADMIN_TOKEN, recovery codes 2FA) usando hardware key. Defesa contra cenário VPS + MinIO + laptop comprometidos.
+
+      ## Escopo
+
+      - Pesquisa: YubiKey vs Solo Keys vs alternativas
+      - Definir lista das credenciais "Tier 0" (break-glass)
+      - Procedimento de gravação + procedimento de recovery
+      - Drill anual
+
+      ## Critério de aceite
+
+      - [ ] Hardware key adquirida
+      - [ ] Tier 0 definido (≤ 5 credenciais)
+      - [ ] Procedimentos documentados e testados
+
+      ## Esforço / Impacto
+
+      Alto / Baixo (mas crítico em cenário de pior caso)
+
+      ## Referências
+
+      - `docs/automacoes/vaultwarden.md` (ideia #12)
+
+  # ============================================================
+  # Headscale — aerobi-ansible (7 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): incluir DB headscale no backup do postgres → MinIO"
+    labels: [automation, headscale, postgres, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Headscale persiste users, devices, pre-auth keys e ACL no Postgres (`headscale` DB). Sem backup = perda da tailnet inteira (reconfigurar do zero todos os clientes).
+
+      ## Escopo
+
+      - `pg_dump headscale` diário, comprimido, com retention 30d
+      - Bucket dedicado `aerobi-prod-backups/postgres/headscale/`
+      - Restore testado: simular perda do volume `postgres_data` + restore
+
+      ## Critério de aceite
+
+      - [ ] Cron + script provisionado via Ansible
+      - [ ] Backup visível no bucket
+      - [ ] Restore testado em VPS dev: tailnet recuperada com mesmos IPs
+      - [ ] Documentação em `docs/automacoes/headscale.md`
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #1)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): rotação automática de pre-auth keys com alerta 7d antes da expiração"
+    labels: [automation, headscale, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Pre-auth keys (ex: `vault_headscale_authkey_vps`) expiram em 90 dias. Esquecer = VPS reiniciada não reconecta na tailnet. Hoje rotação é 100% manual.
+
+      ## Escopo
+
+      - Cron semanal lista keys via `headscale preauthkeys list`
+      - Para cada key com `expiration < now + 7d`, gera key nova e atualiza vault + Vaultwarden
+      - Push alerta 7d antes da expiração (não bloqueante)
+      - Auto-renova keys reusable de servidores (ex: VPS, edge)
+
+      ## Critério de aceite
+
+      - [ ] Script + cron + alerta provisionados
+      - [ ] Rotação testada manualmente em dev
+      - [ ] Vault.yml e Vaultwarden atualizados após rotação
+      - [ ] Documentado em `docs/automacoes/headscale.md`
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #2)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): cleanup automático de nodes inativos > 90 dias"
+    labels: [automation, headscale, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Lista de nodes acumula devices não usados ("invalid-xyz" do Android sem rename). Limpar reduz superfície de auditoria.
+
+      ## Escopo
+
+      - Cron mensal lista nodes com `last_seen > 90d`
+      - Push alerta com lista; auto-delete só após confirmação humana (review necessário)
+      - Whitelist por tag (ex: servidores `tag:vps` nunca são considerados inativos)
+
+      ## Critério de aceite
+
+      - [ ] Script + cron rodando
+      - [ ] Primeira lista revisada manualmente
+      - [ ] Critérios de whitelist documentados
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): validar ACL em CI antes de aplicar (JSON + lógica)"
+    labels: [automation, headscale, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      ACL inválida no `acl.json.j2` derruba o Headscale (recusa subir). Hoje só descobre na aplicação do playbook em prod.
+
+      ## Escopo
+
+      - GitHub Action que roda `headscale --config ... policy check` em PRs que tocam `acl.json.j2`
+      - Validação JSON + validação semântica (tags referenciadas existem)
+      - Fail-fast no PR — não permite merge se inválido
+
+      ## Critério de aceite
+
+      - [ ] Workflow `.github/workflows/headscale-acl-check.yml`
+      - [ ] PR de teste com ACL inválida é bloqueado
+      - [ ] Documentado no `docs/automacoes/headscale.md`
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): monitor canário no Uptime Kuma (API + tailnet alive)"
+    labels: [automation, headscale, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Detectar Headscale fora do ar antes de novos clientes tentarem conectar. Health da API + ping em peer da tailnet (canário).
+
+      ## Escopo
+
+      - Monitor HTTP em `https://headscale.aerobi.com.br/health`
+      - Monitor TCP em `100.64.0.9:something` (aerobi-edge-mvp como canário)
+      - Alertas integrados ao canal padrão (Telegram/Discord)
+
+      ## Critério de aceite
+
+      - [ ] 2 monitores configurados
+      - [ ] Alertas testados (parar container Headscale)
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): relatório semanal de devices conectados via API"
+    labels: [automation, headscale, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje só vemos devices da tailnet quando rodamos `tailscale status`. Relatório periódico ajuda auditar quem está na rede.
+
+      ## Escopo
+
+      - Cron semanal lista nodes (`headscale nodes list -o json`) e formata digest
+      - Push para Discord/Telegram + email opcional
+      - Inclui: hostname, tag, último visto, IP tailnet
+
+      ## Critério de aceite
+
+      - [ ] Script + cron rodando
+      - [ ] Digest semanal validado
+
+      ## Esforço / Impacto
+
+      Baixo / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #6)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(headscale): versionar mudanças na ACL com diff visível"
+    labels: [automation, headscale, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje mudanças na ACL ficam no histórico git mas sem visão "rodada por rodada". Saber quando uma ACL específica entrou em vigor importa em pós-morte de incidente.
+
+      ## Escopo
+
+      - Após cada aplicação de `setup_headscale.yml`, salvar snapshot da ACL ativa com timestamp
+      - Comparação entre versões via `diff`
+      - Mantém últimas N versões (10? 30?)
+
+      ## Critério de aceite
+
+      - [ ] Snapshot automático em volume persistente
+      - [ ] Comando/script para listar e diff versões
+
+      ## Esforço / Impacto
+
+      Baixo / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md` (ideia #7)
+
+  # ============================================================
+  # SFTP Go — aerobi-ansible (7 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): backup do volume sftpgo_data no MinIO"
+    labels: [automation, sftpgo, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Volume `sftpgo_data` tem SQLite (users/configs/audit), host keys SSH (clientes confiam neles), e uploads em `users/<u>/`. Perder = clientes precisam limpar known_hosts e re-cadastrar.
+
+      ## Escopo
+
+      - Cron diário tar do volume → MinIO `aerobi-prod-backups/sftpgo/`
+      - Retention 30d, monitor no Uptime Kuma
+      - Restore testado: garantir que host keys preservadas
+
+      ## Critério de aceite
+
+      - [ ] Script + cron via Ansible
+      - [ ] Restore validado em dev
+      - [ ] Doc atualizado em `docs/automacoes/sftpgo.md`
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #1)
+      - Restore com host keys preservadas: `roles/sftpgo/README.md`
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): provisionar users SFTP via Ansible (declarativo)"
+    labels: [automation, sftpgo, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje users SFTP são criados pela UI ou API REST manualmente. Sem source-of-truth declarativa → não dá pra recriar do zero ou auditar.
+
+      ## Escopo
+
+      - Lista declarativa em `inventory/prod/group_vars/all/all.yml`: `sftpgo_users: [...]`
+      - Role `sftpgo` ganha tasks que: criar user, atualizar senha, configurar quotas/permissões
+      - Idempotente: rodar de novo não duplica nem zera
+
+      ## Critério de aceite
+
+      - [ ] Pelo menos 2 users provisionados via Ansible
+      - [ ] Senhas no vault (referenciadas como `vault_sftpgo_user_<name>_password`)
+      - [ ] Documentação em `docs/automacoes/sftpgo.md`
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #2)
+      - API REST SFTP Go: https://github.com/drakkan/sftpgo/blob/main/openapi/openapi.yaml
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): audit log de uploads/downloads → notificação push"
+    labels: [automation, sftpgo, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      SFTP Go loga cada upload/download em JSON. Push para canal centralizado dá visibilidade do que circula.
+
+      ## Escopo
+
+      - Tail estruturado do log do container (filtrar `event:upload`, `event:download`)
+      - Push para Discord/Telegram (mesmo canal de outros audit logs)
+      - Whitelist de users "ruidosos" para suprimir spam (ex: edge fazendo upload contínuo de gravações)
+
+      ## Critério de aceite
+
+      - [ ] Script + cron
+      - [ ] Push testado
+      - [ ] Whitelist documentada
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): quotas padrão por user (10GB) + alerta de uso > 80%"
+    labels: [automation, sftpgo, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Sem limites, um user mal-configurado pode encher o volume e quebrar todos. Quota previne; alerta dá tempo de reagir.
+
+      ## Escopo
+
+      - Defaults da role: cada user criado tem quota 10GB
+      - Cron diário lê uso via API e alerta se > 80%
+      - Override por user via inventory
+
+      ## Critério de aceite
+
+      - [ ] Quotas aplicadas em users existentes (migração)
+      - [ ] Alerta testado
+      - [ ] Override de quota documentado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): retention policy para uploads antigos > 90 dias"
+    labels: [automation, sftpgo, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Uploads antigos (ex: gravações de câmera) acumulam sem necessidade. Política de retenção previne esgotamento + economiza no backup.
+
+      ## Escopo
+
+      - Cron noturno percorre `users/<u>/` e move/deleta arquivos > N dias
+      - Política configurável por user (alguns precisam reter mais)
+      - Dry-run + report antes de habilitar delete real
+
+      ## Critério de aceite
+
+      - [ ] Script com flag `--dry-run` testado
+      - [ ] Política revisada por owner antes de habilitar
+      - [ ] Documentado
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): monitor canário Uptime Kuma (login SFTP + upload/download)"
+    labels: [automation, sftpgo, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      `/healthz` só valida HTTP. Detectar quebra real do protocolo SFTP exige login + I/O completos.
+
+      ## Escopo
+
+      - Push monitor no Uptime Kuma chamado por script externo (cron 5min)
+      - Script: login com user canário, upload 1B, download, compare, exit
+      - Alerta se qualquer passo falhar
+
+      ## Critério de aceite
+
+      - [ ] User canário criado (com quota mínima)
+      - [ ] Script de probe rodando
+      - [ ] Push monitor configurado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #6)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(sftpgo): hook de upload completo → notificação aerobi-api"
+    labels: [automation, sftpgo, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Quando edge sobe gravação via SFTP, aerobi-api precisa processar (transcodificar, indexar). Hoje exige polling; hook elimina latência.
+
+      ## Escopo
+
+      - SFTP Go suporta hooks pós-upload (CloudCommand/Action)
+      - Configurar webhook para `https://api.aerobi.com.br/internal/sftp/uploaded`
+      - aerobi-api implementa endpoint (issue separada lá)
+
+      ## Critério de aceite
+
+      - [ ] Hook configurado no SFTP Go
+      - [ ] Endpoint do aerobi-api respondendo
+      - [ ] E2E testado: upload → API recebe webhook
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/sftpgo.md` (ideia #7)
+
+  # ============================================================
+  # MinIO — aerobi-ansible (7 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): bucket policies declarativas via Ansible (em vez da UI)"
+    labels: [automation, minio, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Policies hoje configuradas pela UI/mc imperativo — recriar = manual. Declarativo = source-of-truth, audit-trail no git.
+
+      ## Escopo
+
+      - Lista declarativa em `minio_buckets` com policy JSON inline
+      - Role aplica via `mc admin policy create` + `mc admin policy attach`
+      - Idempotente
+
+      ## Critério de aceite
+
+      - [ ] Policies dos 2 buckets atuais (uploads, backups) declarativas
+      - [ ] Recriar bucket via Ansible reproduz config
+      - [ ] Doc em `docs/automacoes/minio.md`
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #1)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): replicação off-site com rclone (defesa em profundidade)"
+    labels: [automation, minio, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje MinIO é única cópia. Disco da VPS pifa = perdeu tudo (uploads + backups). Replicar para destino independente protege.
+
+      ## Escopo
+
+      - rclone sync diário para um destino (Backblaze B2, Cloudflare R2, ou OVH cold)
+      - Encryption at rest no destino (rclone crypt)
+      - Retention 90d off-site
+
+      ## Critério de aceite
+
+      - [ ] Destino off-site escolhido e provisionado
+      - [ ] rclone configurado com encryption
+      - [ ] Cron rodando e validado
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #2)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): lifecycle rules para retenção/limpeza de objetos antigos"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Backups antigos ocupam espaço inutilmente. Lifecycle rules limpam após N dias automaticamente.
+
+      ## Escopo
+
+      - Bucket `aerobi-prod-backups`: expirar após 30d (ou 90d para alguns prefixos)
+      - Bucket `aerobi-prod-uploads`: regras conforme política do produto
+      - Aplicar via `mc ilm rule add` declarativamente pela role
+
+      ## Critério de aceite
+
+      - [ ] Rules ativas e visíveis em `mc ilm rule list`
+      - [ ] Comportamento testado (ver objeto > N dias sumindo)
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): audit log via mc admin → push canal"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Acessos ao MinIO (especialmente console admin) sem visibilidade. Audit nos logs estruturados é a fonte.
+
+      ## Escopo
+
+      - `mc admin trace` ou `mc admin logs` com filtros (admin actions, falhas auth)
+      - Push para canal Discord/Telegram
+      - Whitelist de IPs/users
+
+      ## Critério de aceite
+
+      - [ ] Cron + script + push rodando
+      - [ ] Doc em `docs/automacoes/minio.md`
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): alerta de espaço usado > 80% no Uptime Kuma"
+    labels: [automation, minio, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Disco cheio quebra MinIO + outros serviços. Alerta antes do problema dá tempo de reagir.
+
+      ## Escopo
+
+      - Push monitor no Uptime Kuma chamado por cron
+      - Script: `mc admin info`/`df -h` calculando % usado
+      - Alerta em 80% (warning) e 90% (crítico)
+
+      ## Critério de aceite
+
+      - [ ] Monitor ativo
+      - [ ] Alerta testado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): pre-signed URL helper como serviço HTTP"
+    labels: [automation, minio, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Apps internos pedem pre-signed URLs para upload direto cliente → MinIO. Hoje cada app implementa SDK; centralizar via micro-serviço reduz duplicação.
+
+      ## Escopo
+
+      - Micro-serviço HTTP simples (Go ou Bun) com endpoint `/presign?bucket=X&key=Y`
+      - Auth via header (token simples ou JWT)
+      - TTL configurável
+
+      ## Critério de aceite
+
+      - [ ] Serviço deployado
+      - [ ] 1 app consumindo
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #6)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(minio): versioning em buckets críticos (uploads, backups)"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Versioning protege contra delete acidental e ransomware. Hoje desligado nos buckets atuais.
+
+      ## Escopo
+
+      - Habilitar versioning nos 2 buckets via `mc version enable`
+      - Lifecycle rule de transição/limpeza de versions antigas
+      - Documentar como restaurar versão anterior
+
+      ## Critério de aceite
+
+      - [ ] Versioning habilitado
+      - [ ] Teste: deletar object, restaurar via mc
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/minio.md` (ideia #7)
+
+  # ============================================================
+  # PostgreSQL — aerobi-ansible (7 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(postgres): backup pg_dump diário → MinIO com retention 30d"
+    labels: [automation, postgres, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Postgres é o store crítico (aerobi-api, headscale, vaultwarden). Hoje sem backup automatizado — incidente = recreate from scratch.
+
+      ## Escopo
+
+      - Cron diário `pg_dumpall` (estrutura + dados) comprimido → MinIO `aerobi-prod-backups/postgres/`
+      - Retention 30d com lifecycle rule
+      - Validação semanal: restore parcial em VPS dev
+
+      ## Critério de aceite
+
+      - [ ] Script + cron via Ansible
+      - [ ] Restore validado
+      - [ ] Doc em `docs/automacoes/postgres.md`
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #1)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(postgres): WAL archiving para Point-In-Time-Recovery (PITR)"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      pg_dump diário tem RPO de 24h. Para reduzir, WAL archiving permite restore até o segundo antes do incidente.
+
+      ## Escopo
+
+      - `archive_mode = on` + `archive_command` enviando WALs ao MinIO
+      - Base backup semanal via `pg_basebackup`
+      - Procedimento de restore PITR documentado
+
+      ## Critério de aceite
+
+      - [ ] WAL archiving funcionando
+      - [ ] PITR testado em dev (restaurar até T-N)
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #2)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(postgres): habilitar pgAudit para audit log de queries"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Sem audit log estruturado, queries suspeitas (DROP/DELETE/ALTER) ficam invisíveis. pgAudit complementa isso.
+
+      ## Escopo
+
+      - Habilitar extensão pgAudit nos DBs críticos
+      - Configurar nível de log (DDL + role changes mínimo)
+      - Integrar logs ao parser de audit (push canal)
+
+      ## Critério de aceite
+
+      - [ ] pgAudit ativo
+      - [ ] Eventos DDL aparecem nos logs
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(postgres): monitor de slow queries → alerta"
+    labels: [automation, postgres, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Slow queries degradam app sem ficar óbvio. `pg_stat_statements` é a fonte; alerta antes do efeito.
+
+      ## Escopo
+
+      - Habilitar extensão `pg_stat_statements`
+      - Cron 15min lê top-N slow queries; alerta se mediana > X ms
+      - Push para Uptime Kuma / canal
+
+      ## Critério de aceite
+
+      - [ ] Extensão ativa
+      - [ ] Alerta testado simulando query lenta
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(postgres): VACUUM ANALYZE schedule (manutenção)"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Autovacuum tem limites em tabelas grandes ou de alta rotatividade. Schedule manual semanal evita bloat acumulado.
+
+      ## Escopo
+
+      - Cron semanal `VACUUM (ANALYZE, VERBOSE)` nos DBs principais
+      - Log retornando, alerta se demorar > threshold
+
+      ## Critério de aceite
+
+      - [ ] Cron rodando
+      - [ ] Métricas de bloat antes/depois documentadas
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(postgres): monitor de conexões/locks via pg_stat_activity"
+    labels: [automation, postgres, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Conexões esgotadas ou locks longos derrubam apps. Detectar precoce evita downtime.
+
+      ## Escopo
+
+      - Cron consultando `pg_stat_activity`: total conexões, idle in transaction, locks bloqueados
+      - Alerta em thresholds (ex: > 80% max_connections, lock > 5min)
+
+      ## Critério de aceite
+
+      - [ ] Cron + alerta rodando
+      - [ ] Thresholds documentados
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #6)
+
+  - repo: atzaero/aerobi-ansible
+    title: "research(postgres): replicação master/replica para HA (futuro)"
+    labels: [automation, postgres, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Single instance = single point of failure. Replicação streaming permite failover.
+
+      ## Escopo
+
+      - Avaliar: pgpool/repmgr vs Patroni vs solução managed
+      - Custo + complexidade vs HA real ganho
+      - Definir gatilho (ex: SLA pediu, volume X)
+
+      ## Critério de aceite
+
+      - [ ] Doc de comparação publicada
+      - [ ] Decisão registrada (vai/não vai, quando)
+
+      ## Esforço / Impacto
+
+      Alto / Médio (no futuro)
+
+      ## Referências
+
+      - `docs/automacoes/postgres.md` (ideia #7)
+
+  # ============================================================
+  # Uptime Kuma — aerobi-ansible (7 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): provisionar monitors via Ansible (import/export JSON)"
+    labels: [automation, uptime-kuma, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Monitors hoje configurados manualmente pela UI. Perder o volume = configurar tudo de novo. Declarativo via Ansible torna repetível.
+
+      ## Escopo
+
+      - Lista de monitors em `inventory/prod/group_vars/all/all.yml`
+      - Role aplica via API REST do Uptime Kuma (ou import via CLI)
+      - Idempotente
+
+      ## Critério de aceite
+
+      - [ ] Monitors atuais exportados e versionados
+      - [ ] Recriação testada em dev
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #1)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): backup do volume uptime_kuma_data → MinIO"
+    labels: [automation, uptime-kuma, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Volume tem SQLite com monitors, history, notifs. Perder = perde histórico (e config se não houver issue #1 ainda).
+
+      ## Escopo
+
+      - Cron diário tar → MinIO
+      - Retention 30d
+
+      ## Critério de aceite
+
+      - [ ] Backup automático rodando
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #2)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): push monitors para cron jobs críticos (backup, etc)"
+    labels: [automation, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Crons (backups, rotação senha) podem falhar silenciosamente. Push monitor = "se não receber ping em N min, alerta".
+
+      ## Escopo
+
+      - Para cada cron crítico, criar push monitor
+      - Crontab termina com curl pro push URL (success ou fail)
+      - Mapa de monitors em doc
+
+      ## Critério de aceite
+
+      - [ ] Push URLs configurados para 3+ crons
+      - [ ] Falha simulada gera alerta
+
+      ## Esforço / Impacto
+
+      Baixo / Alto (segurança operacional)
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): integração centralizada Discord/Telegram para alertas"
+    labels: [automation, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje notifs do Uptime Kuma podem ir para canal X, scripts de audit para Y. Centralizar evita perda de alertas.
+
+      ## Escopo
+
+      - Decidir canal único (Discord vs Telegram)
+      - Configurar Uptime Kuma + scripts de audit para esse canal
+      - Documentar fluxo
+
+      ## Critério de aceite
+
+      - [ ] Canal único decidido e documentado
+      - [ ] Todas as fontes de alerta apontando para ele
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): status page pública em status-public.aerobi.com.br"
+    labels: [automation, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje `status.aerobi.com.br` é tailnet-only. Status page pública para usuários do aerobi-api exige segundo vhost.
+
+      ## Escopo
+
+      - Criar vhost `status-public.aerobi.com.br` apontando para mesma porta interna do Uptime Kuma, mas sem `vhost_tailnet_only`
+      - Configurar status page no Uptime Kuma com slug específico
+      - Listar apenas monitors públicos (apps; não admin)
+
+      ## Critério de aceite
+
+      - [ ] DNS + vhost criado
+      - [ ] Status page acessível externamente
+      - [ ] Apenas monitors apropriados listados
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): monitor de TLS expiry redundante (defesa Certbot)"
+    labels: [automation, uptime-kuma, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Certbot auto-renova, mas falha silenciosa já aconteceu em projetos. Monitor TLS Expiry independente captura.
+
+      ## Escopo
+
+      - Para cada subdomínio, monitor TLS Certificate no Uptime Kuma
+      - Alerta 30d antes do expiry
+
+      ## Critério de aceite
+
+      - [ ] Monitors configurados para todos os subdomínios
+
+      ## Esforço / Impacto
+
+      Baixo / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #6)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(uptime-kuma): weekly digest report (uptime + incidentes)"
+    labels: [automation, uptime-kuma, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Visibilidade semanal do uptime + incidentes ajuda planejar melhorias.
+
+      ## Escopo
+
+      - Cron semanal coleta métricas via API
+      - Formata digest e envia para canal/email
+
+      ## Critério de aceite
+
+      - [ ] Digest rodando e validado
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+      ## Referências
+
+      - `docs/automacoes/uptime-kuma.md` (ideia #7)
+
+  # ============================================================
+  # Valkey — aerobi-ansible (6 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(valkey): backup snapshot RDB diário → MinIO"
+    labels: [automation, valkey, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Valkey é volátil por design. Mas cache critical perdido = thundering herd nos DBs. Snapshot diário ajuda.
+
+      ## Escopo
+
+      - BGSAVE diário, copia .rdb para MinIO
+      - Retention 7d (cache não precisa muito histórico)
+
+      ## Critério de aceite
+
+      - [ ] Snapshots rodando
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/valkey.md` (ideia #1)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(valkey): monitor de memória > 80% maxmemory"
+    labels: [automation, valkey, uptime-kuma, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Cheio = evictions agressivas (eviction policy) ou rejeições (no-eviction). Detectar antes.
+
+      ## Escopo
+
+      - Cron 5min `valkey-cli INFO memory`
+      - Push monitor se `used_memory / maxmemory > 0.8`
+
+      ## Critério de aceite
+
+      - [ ] Monitor ativo
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - `docs/automacoes/valkey.md` (ideia #2)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(valkey): audit via SLOWLOG + KEYSPACE notifications"
+    labels: [automation, valkey, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Slow commands + delete em massa são red flags. Audit ajuda detectar problemas de performance e ações suspeitas.
+
+      ## Escopo
+
+      - Configurar `slowlog-log-slower-than 10ms`
+      - Cron lê SLOWLOG e envia digest
+      - Opcional: KEYSPACE notifications para `DEL`
+
+      ## Critério de aceite
+
+      - [ ] SLOWLOG ativo + digest funcionando
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/valkey.md` (ideia #3)
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(valkey): ACL users granulares via Ansible (em vez de default user só)"
+    labels: [automation, valkey, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje só user `default`. Apps compartilham senha. ACL granular limita blast radius se uma app for comprometida.
+
+      ## Escopo
+
+      - Lista declarativa em inventory: `valkey_users: [{name, password, acl}]`
+      - Apps consomem com user específico em vez de `default`
+
+      ## Critério de aceite
+
+      - [ ] Pelo menos 2 ACLs aplicadas (aerobi-api + outro)
+      - [ ] Apps refatorados
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/valkey.md` (ideia #4)
+
+  - repo: atzaero/aerobi-ansible
+    title: "research(valkey): cluster mode quando volume crescer"
+    labels: [automation, valkey, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Single instance limita scale. Sharding via cluster mode escala horizontal mas adiciona complexidade.
+
+      ## Escopo
+
+      - Avaliar quando vale (volume Y, latência Z)
+      - Custo migração
+
+      ## Critério de aceite
+
+      - [ ] Doc de avaliação
+
+      ## Esforço / Impacto
+
+      Alto / Baixo (no futuro)
+
+      ## Referências
+
+      - `docs/automacoes/valkey.md` (ideia #5)
+
+  - repo: atzaero/aerobi-ansible
+    title: "research(valkey): replicação master/replica para HA"
+    labels: [automation, valkey, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Replica permite failover + leitura escalada. Similar à pesquisa de postgres replica.
+
+      ## Escopo
+
+      - Avaliar se vale dada criticidade do cache
+      - Definir gatilho
+
+      ## Critério de aceite
+
+      - [ ] Doc de avaliação
+
+      ## Esforço / Impacto
+
+      Alto / Baixo (no futuro)
+
+      ## Referências
+
+      - `docs/automacoes/valkey.md` (ideia #6)
+
+  # ============================================================
+  # Transversal (operacional) — aerobi-ansible (6 issues)
+  # ============================================================
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(ci): adicionar ansible-lint + yamllint + molecule no CI"
+    labels: [automation, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje só `syntax-check` manual. Lint estruturado pega problemas comuns (módulos deprecated, nomes inconsistentes, etc.).
+
+      ## Escopo
+
+      - Workflow `.github/workflows/ansible-lint.yml`
+      - Roda em PRs que tocam `roles/`, `playbooks/`, `inventory/`
+      - Molecule scenario para roles novos
+
+      ## Critério de aceite
+
+      - [ ] Lint passa nos roles atuais
+      - [ ] PR de teste com problema é bloqueada
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+      ## Referências
+
+      - https://ansible-lint.readthedocs.io/
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(ci): pre-commit hooks com secret scanning"
+    labels: [automation, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Vazamento de secret em commit é caro de remediar. Hooks pre-commit captam antes do push.
+
+      ## Escopo
+
+      - `.pre-commit-config.yaml` com: yamllint, ansible-lint, detect-secrets, gitleaks
+      - Doc dev: como instalar (`pre-commit install`)
+
+      ## Critério de aceite
+
+      - [ ] Hooks ativos
+      - [ ] Teste: tentar commitar secret é bloqueado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+      ## Referências
+
+      - https://pre-commit.com/
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(ops): renovação automatizada de pre-auth keys do tailscale via cron"
+    labels: [automation, headscale, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Issue separada do "rotação Headscale pre-auth keys" focada na automação do cron específico para auth key reusable da VPS.
+
+      ## Escopo
+
+      - Cron diário valida expiração de `vault_headscale_authkey_vps`
+      - Se < 7d, regenera + atualiza vault.yml + Vaultwarden
+      - Sem necessidade de re-conectar a VPS (key já consumida)
+
+      ## Critério de aceite
+
+      - [ ] Cron + script rodando
+      - [ ] Rotação testada
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+      ## Referências
+
+      - `docs/automacoes/headscale.md`
+
+  - repo: atzaero/aerobi-ansible
+    title: "research(observability): centralized log shipping (Loki/Vector/Grafana)"
+    labels: [automation, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Logs hoje dispersos em `docker logs` + `journalctl`. Aggregator central facilita troubleshooting de incidentes.
+
+      ## Escopo
+
+      - Avaliar: Loki + Promtail vs Vector vs solução managed
+      - Custo (RAM/disco)
+      - Plano de migração gradual
+
+      ## Critério de aceite
+
+      - [ ] Doc de comparação
+      - [ ] Decisão e plano
+
+      ## Esforço / Impacto
+
+      Alto / Médio
+
+      ## Referências
+
+      - Stack popular: Grafana + Loki + Promtail
+
+  - repo: atzaero/aerobi-ansible
+    title: "feat(ops): healthcheck dashboard automático a partir do Uptime Kuma"
+    labels: [automation, uptime-kuma, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Status page do Uptime Kuma é boa mas pouco customizável. Dashboard agregado (Grafana?) consumindo Uptime Kuma API + outras fontes (Docker, disco, etc) seria mais rico.
+
+      ## Escopo
+
+      - Avaliar: Grafana com data sources (Uptime Kuma + Loki + Prometheus)
+      - Definir métricas-chave para dashboard único de operação
+
+      ## Critério de aceite
+
+      - [ ] Dashboard inicial publicado
+
+      ## Esforço / Impacto
+
+      Alto / Baixo
+
+      ## Referências
+
+      - Possível dependência: research log shipping
+
+  - repo: atzaero/aerobi-ansible
+    title: "research(secrets): migrar ansible-vault para 1Password CLI ou similar"
+    labels: [automation, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      ansible-vault é simples mas tem limitações (sem rotação master, sem auditoria). 1Password CLI, sops, Vault by HashiCorp são alternativas com mais features.
+
+      ## Escopo
+
+      - Avaliar 3 alternativas: 1Password CLI, sops + age, HashiCorp Vault
+      - Custo + complexidade vs ganho
+      - Plano de migração se decidir mudar
+
+      ## Critério de aceite
+
+      - [ ] Doc de comparação publicada
+      - [ ] Decisão registrada
+
+      ## Esforço / Impacto
+
+      Alto / Médio (no longo prazo)
+
+      ## Referências
+
+      - sops: https://github.com/getsops/sops
+      - 1Password CLI: https://developer.1password.com/docs/cli/
+
+  # ============================================================
+  # ansible-vps (legacy) — Vaultwarden (8 issues)
+  # ============================================================
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): backup diário do volume → MinIO/external"
+    labels: [automation, vaultwarden, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Volume `vaultwarden_data` sem backup automatizado. Perda do volume = perda do cofre.
+
+      ## Escopo
+
+      - Cron diário tar do volume → destino (MinIO ou cloud)
+      - Retention 30d
+      - Push notif se falhar
+
+      ## Critério de aceite
+
+      - [ ] Backup automático rodando
+      - [ ] Restore testado em dev
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+      ## Referências
+
+      - Inspiração: `atzaero/aerobi-ansible#X` (mesmo conceito, adaptar destino)
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): audit log de acessos /admin → push notification"
+    labels: [automation, vaultwarden, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      `/admin` token vazado = comprometimento crítico. Sem alertas hoje.
+
+      ## Escopo
+
+      - Cron tail no `vaultwarden.log` filtrando `/admin`
+      - Push para canal (Telegram/Discord/email)
+      - Whitelist IPs operadores conhecidos
+
+      ## Critério de aceite
+
+      - [ ] Cron rodando
+      - [ ] Webhook testado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): monitor canário validar DB healthy via API"
+    labels: [automation, vaultwarden, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      `/alive` superficial — não detecta DB corrompido. Item canário + monitor consumindo API é mais profundo.
+
+      ## Escopo
+
+      - Item fixo no cofre com valor canário
+      - Monitor externo valida o valor periodicamente
+
+      ## Critério de aceite
+
+      - [ ] Monitor configurado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): rotação periódica de senhas operacionais"
+    labels: [automation, vaultwarden, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Senhas administrativas nunca rotacionadas. Risco aumenta com tempo.
+
+      ## Escopo
+
+      - Cron mensal gera nova senha + aplica em serviço + atualiza vault.yml + Vaultwarden
+      - Atômico ou rollback
+
+      ## Critério de aceite
+
+      - [ ] Pelo menos 1 senha rotacionada via automação
+
+      ## Esforço / Impacto
+
+      Alto / Alto
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): export off-site mensal criptografado"
+    labels: [automation, vaultwarden, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Defesa em profundidade caso destino principal de backup também comprometido.
+
+      ## Escopo
+
+      - Cron mensal `bw export --format encrypted_json`
+      - 2 destinos off-site (laptop pessoal + hardware key)
+
+      ## Critério de aceite
+
+      - [ ] Export automático rodando
+      - [ ] Restore testado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(ci): GitHub Actions puxa secrets do Vaultwarden"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje secrets duplicados entre GH Secrets + Vaultwarden. Unificar reduz desvio.
+
+      ## Escopo
+
+      - Self-hosted runner com acesso ao Vaultwarden
+      - Migrar pelo menos 1 secret de teste
+
+      ## Critério de aceite
+
+      - [ ] Runner configurado, 1 secret migrado
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): bw serve local para devs"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Devs novos copiam `.env.example` manualmente. `bw serve` local automatiza.
+
+      ## Escopo
+
+      - Helper script `dev/load-secrets.sh`
+      - Doc dev
+
+      ## Critério de aceite
+
+      - [ ] Helper testado por dev real
+
+      ## Esforço / Impacto
+
+      Baixo / Baixo
+
+  - repo: elvisea/ansible-vps
+    title: "feat(vaultwarden): alerta semanal de senhas fracas ou > 90 dias"
+    labels: [automation, vaultwarden, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Sem visibilidade hoje sobre idade/força das senhas no cofre.
+
+      ## Escopo
+
+      - Cron semanal varre items
+      - Push report
+
+      ## Critério de aceite
+
+      - [ ] Report gerado e enviado
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+  # ============================================================
+  # ansible-vps — PostgreSQL (6 issues)
+  # ============================================================
+
+  - repo: elvisea/ansible-vps
+    title: "feat(postgres): backup pg_dump diário → MinIO com retention"
+    labels: [automation, postgres, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Sem backup automático do Postgres legado. Incidente = recreate from scratch.
+
+      ## Escopo
+
+      - Cron diário `pg_dumpall` → MinIO local ou external
+      - Retention 30d
+
+      ## Critério de aceite
+
+      - [ ] Backup automático rodando
+
+      ## Esforço / Impacto
+
+      Baixo / Alto
+
+  - repo: elvisea/ansible-vps
+    title: "feat(postgres): WAL archiving para PITR"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      pg_dump tem RPO de 24h. WAL archiving reduz para segundos.
+
+      ## Escopo
+
+      - archive_mode on + archive_command para MinIO
+      - Base backup semanal
+
+      ## Critério de aceite
+
+      - [ ] PITR testado
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+  - repo: elvisea/ansible-vps
+    title: "feat(postgres): monitor de slow queries → alerta"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Slow queries degradam apps. pg_stat_statements + alerta antecipa.
+
+      ## Escopo
+
+      - Habilitar extensão
+      - Cron com push alert se mediana > X ms
+
+      ## Critério de aceite
+
+      - [ ] Monitor ativo
+
+      ## Esforço / Impacto
+
+      Médio / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(postgres): VACUUM ANALYZE schedule"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Autovacuum tem limites em tabelas grandes. Schedule manual evita bloat.
+
+      ## Escopo
+
+      - Cron semanal `VACUUM ANALYZE`
+
+      ## Critério de aceite
+
+      - [ ] Cron rodando
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(postgres): monitor de conexões/locks via pg_stat_activity"
+    labels: [automation, postgres, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Conexões esgotadas / locks longos derrubam apps.
+
+      ## Escopo
+
+      - Cron consultando pg_stat_activity
+      - Alerta em thresholds
+
+      ## Critério de aceite
+
+      - [ ] Alerta testado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "research(postgres): replicação para HA"
+    labels: [automation, postgres, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Single instance = SPOF. Avaliar replicação.
+
+      ## Escopo
+
+      - Avaliar pgpool/repmgr/Patroni
+      - Doc decisão
+
+      ## Critério de aceite
+
+      - [ ] Doc publicada
+
+      ## Esforço / Impacto
+
+      Alto / Médio
+
+  # ============================================================
+  # ansible-vps — MinIO (6 issues)
+  # ============================================================
+
+  - repo: elvisea/ansible-vps
+    title: "feat(minio): bucket policies declarativas via Ansible"
+    labels: [automation, minio, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Policies hoje imperativas. Declarativo = audit-trail no git.
+
+      ## Escopo
+
+      - Lista de buckets + policies no inventory
+      - Role aplica via mc admin
+
+      ## Critério de aceite
+
+      - [ ] Recriação testada
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+  - repo: elvisea/ansible-vps
+    title: "feat(minio): lifecycle rules para retenção"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Objetos antigos ocupam espaço inutilmente.
+
+      ## Escopo
+
+      - Lifecycle rules declarativas
+      - Expirar objetos > N dias por bucket
+
+      ## Critério de aceite
+
+      - [ ] Regras ativas
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(minio): replicação off-site com rclone"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      MinIO única cópia. Replicar protege.
+
+      ## Escopo
+
+      - rclone sync para destino externo (B2/R2)
+      - Encryption at rest
+
+      ## Critério de aceite
+
+      - [ ] Sync rodando
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+  - repo: elvisea/ansible-vps
+    title: "feat(minio): audit log via mc admin"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Sem visibilidade hoje de acessos admin.
+
+      ## Escopo
+
+      - mc admin trace/logs
+      - Push para canal
+
+      ## Critério de aceite
+
+      - [ ] Audit funcionando
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(minio): alerta de espaço usado > 80%"
+    labels: [automation, minio, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Disco cheio quebra MinIO.
+
+      ## Escopo
+
+      - Cron + alerta em thresholds (80% warning, 90% crit)
+
+      ## Critério de aceite
+
+      - [ ] Alerta testado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(minio): versioning em buckets críticos"
+    labels: [automation, minio, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Versioning protege contra delete acidental e ransomware.
+
+      ## Escopo
+
+      - Habilitar versioning + lifecycle de versions antigas
+
+      ## Critério de aceite
+
+      - [ ] Restore de versão testado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  # ============================================================
+  # ansible-vps — Nginx + Fail2Ban (5 issues)
+  # ============================================================
+
+  - repo: elvisea/ansible-vps
+    title: "feat(nginx): rate limiting padrão nos vhosts públicos"
+    labels: [automation, nginx, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Vhosts públicos sem rate limit ficam vulneráveis a flood/scraper.
+
+      ## Escopo
+
+      - Bloco `limit_req_zone` no template
+      - Defaults conservadores (ex: 10 req/s burst 20)
+      - Override por vhost
+
+      ## Critério de aceite
+
+      - [ ] Rate limit ativo
+      - [ ] Doc de override
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(nginx): logging estruturado (JSON) para análise"
+    labels: [automation, nginx, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Log padrão é texto livre — difícil de parsear.
+
+      ## Escopo
+
+      - Custom log_format JSON
+      - Compatível com Loki/Vector futuro
+
+      ## Critério de aceite
+
+      - [ ] Logs em JSON validados
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(nginx): security headers padrão no template (HSTS, CSP, etc)"
+    labels: [automation, nginx, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Faltam headers de segurança nos vhosts atuais. ssl-labs/securityheaders.com avaliariam C ou pior.
+
+      ## Escopo
+
+      - HSTS (preload), X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+      - CSP báscia (override por app)
+
+      ## Critério de aceite
+
+      - [ ] securityheaders.com avalia A em todos os vhosts
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(nginx): monitor de TLS expiry"
+    labels: [automation, nginx, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Certbot auto-renova mas falhas silenciosas acontecem.
+
+      ## Escopo
+
+      - Monitor TLS expiry para cada subdomínio
+      - Alerta 30d antes
+
+      ## Critério de aceite
+
+      - [ ] Monitors configurados
+
+      ## Esforço / Impacto
+
+      Baixo / Baixo
+
+  - repo: elvisea/ansible-vps
+    title: "feat(fail2ban): geoip blocking opcional (lista de países)"
+    labels: [automation, fail2ban, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Defesa adicional contra ataques de regiões específicas.
+
+      ## Escopo
+
+      - Configuração opcional `ufw_geoip_block_countries: []`
+      - Implementação com ipset/MaxMind GeoLite2
+
+      ## Critério de aceite
+
+      - [ ] Feature flag funcionando (off por default)
+
+      ## Esforço / Impacto
+
+      Médio / Baixo
+
+  # ============================================================
+  # ansible-vps — Transversal (5 issues)
+  # ============================================================
+
+  - repo: elvisea/ansible-vps
+    title: "feat(ci): adicionar ansible-lint + yamllint no CI"
+    labels: [automation, priority-high]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Hoje só syntax-check manual. Lint estruturado pega problemas comuns.
+
+      ## Escopo
+
+      - GH Action rodando em PRs
+      - Roles/playbooks atuais devem passar (corrigir o que não passar)
+
+      ## Critério de aceite
+
+      - [ ] Workflow ativo + PRs validados
+
+      ## Esforço / Impacto
+
+      Médio / Alto
+
+  - repo: elvisea/ansible-vps
+    title: "feat(ci): pre-commit hooks com secret scanning"
+    labels: [automation, priority-medium]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Vazamento de secret no commit é caro.
+
+      ## Escopo
+
+      - `.pre-commit-config.yaml` com yamllint, ansible-lint, detect-secrets, gitleaks
+      - Doc dev
+
+      ## Critério de aceite
+
+      - [ ] Hooks ativos
+      - [ ] Teste: commit com secret é bloqueado
+
+      ## Esforço / Impacto
+
+      Baixo / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "feat(ops): healthcheck dashboard automático"
+    labels: [automation, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Status agregado dos serviços em 1 dashboard.
+
+      ## Escopo
+
+      - Dashboard simples (Grafana ou static)
+      - Consumir health endpoints
+
+      ## Critério de aceite
+
+      - [ ] Dashboard publicado
+
+      ## Esforço / Impacto
+
+      Alto / Baixo
+
+  - repo: elvisea/ansible-vps
+    title: "research(observability): centralized log shipping"
+    labels: [automation, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      Logs dispersos em docker/journalctl. Aggregator central facilita troubleshooting.
+
+      ## Escopo
+
+      - Avaliar Loki/Vector vs alternativas
+      - Custo de RAM/disco
+
+      ## Critério de aceite
+
+      - [ ] Doc de comparação
+
+      ## Esforço / Impacto
+
+      Alto / Médio
+
+  - repo: elvisea/ansible-vps
+    title: "research(secrets): migrar ansible-vault para secret manager moderno"
+    labels: [automation, priority-low]
+    milestone: "Automações backlog"
+    body: |
+      ## Contexto
+
+      ansible-vault tem limitações (sem rotação master, sem audit). Alternativas: sops, 1Password CLI, HashiCorp Vault.
+
+      ## Escopo
+
+      - Avaliar 3 alternativas
+      - Plano de migração
+
+      ## Critério de aceite
+
+      - [ ] Doc publicada
+
+      ## Esforço / Impacto
+
+      Alto / Médio

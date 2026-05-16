@@ -243,9 +243,22 @@ bw get template item | jq --arg org "$ORG" --arg coll "$COLL" '
 - **Org owner unique-point-of-failure**: se você sair, ninguém recupera. Documentar processo de recovery (export off-site, segunda conta admin) é o item #9 do backlog — não adiar muito.
 - **Reset de admin do server ≠ reset de senha de user**: o `ADMIN_TOKEN` é separado das contas. Esquecer o token = recuperar via vault.yml (ainda funciona); esquecer senha de user = enviar reset por SMTP.
 
+## Issues no GitHub
+
+Backlog completo de Vaultwarden: [12 issues abertas com label `vaultwarden` + `automation`](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Avaultwarden+label%3Aautomation).
+
+Filtros úteis:
+
+- [🔴 Alta prioridade](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Avaultwarden+label%3Apriority-high) — começar por aqui (3 issues: backup, espelhamento, audit)
+- [🟡 Média prioridade](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Avaultwarden+label%3Apriority-medium) — 5 issues
+- [🟢 Baixa prioridade](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Avaultwarden+label%3Apriority-low) — 4 issues
+
+Fonte do backlog: [`scripts/issue-content/automacoes.yml`](../../scripts/issue-content/automacoes.yml).
+
 ## Referências
 
 - Docs upstream: https://github.com/dani-garcia/vaultwarden/wiki
 - Bitwarden API docs (mesma do Vaultwarden): https://bitwarden.com/help/api/
 - Bw CLI: https://bitwarden.com/help/cli/
-- Mini-script do bw para criação de items: [`scripts/migrate-secrets-to-vaultwarden.sh`](../../scripts/migrate-secrets-to-vaultwarden.sh)
+- Script de migração de secrets: [`scripts/migrate-secrets-to-vaultwarden.sh`](../../scripts/migrate-secrets-to-vaultwarden.sh)
+- Docs dos scripts: [`scripts/README.md`](../../scripts/README.md)
