@@ -14,22 +14,31 @@
 #   - Nada é logado em plaintext. set -x está OFF intencionalmente.
 #   - Em caso de erro no meio, items já criados ficam (idempotência cobre).
 #
+# DUAS SENHAS DIFERENTES (atenção pra não confundir!):
+#   1. Master do BITWARDEN (do seu user no Vaultwarden, mesma do login
+#      em https://vault.aerobi.com.br). Pedida pelo `bw unlock`.
+#   2. Master do ANSIBLE VAULT (~/.ansible-vault/aerobi-prod).
+#      NÃO é pedida — o ansible.cfg aponta para esse arquivo, decripta
+#      automaticamente. Só falha se o arquivo estiver com a senha errada.
+#
 # USO:
 #   1. Instalar bw CLI: npm install -g @bitwarden/cli
 #   2. Configurar:  bw config server https://vault.aerobi.com.br
-#   3. Login:        bw login <seu-email>
+#   3. Login com user OWNER ou ADMIN da org Aerobi:
+#        bw login <email-do-owner>
+#      (User comum não consegue criar Collections — vai dar 401)
 #   4. Conectar à tailnet:  sudo tailscale up
-#   5. Confirmar que a Org 'Aerobi' existe no Vaultwarden e que seu
-#      user é OWNER ou ADMIN dela (precisa pra criar Collections).
-#   6. Rodar este script:
-#        ./scripts/migrate-secrets-to-vaultwarden.sh
-#   7. Será pedida a master do vault Ansible e a master do Bitwarden.
+#   5. Rodar:  ./scripts/migrate-secrets-to-vaultwarden.sh
 #
 # COLLECTIONS: Se alguma Collection esperada não existir, o script a
 # cria automaticamente via 'bw create org-collection'. Idempotente:
-# rodar de novo não duplica nada.
+# rodar de novo não duplica nada. Requer user OWNER/ADMIN.
 #
-# DEPENDÊNCIAS: bw, ansible, jq, yq (snap install yq ou pip)
+# DEPENDÊNCIAS: bw, ansible, jq, python3
+
+# Suprime "DeprecationWarning: punycode module is deprecated" do Node,
+# que polui o output do bw CLI sem afetar a operação.
+export NODE_OPTIONS="--no-deprecation"
 
 set -euo pipefail
 
@@ -55,9 +64,16 @@ declare -A COLLECTION_NAMES=(
 # Helpers
 # -----------------------------------------------------------------------------
 
-err() { printf "✗ %s\n" "$*" >&2; exit 1; }
-ok()  { printf "✓ %s\n" "$*"; }
-info(){ printf "→ %s\n" "$*"; }
+err()    { printf "✗ %s\n" "$*" >&2; exit 1; }
+ok()     { printf "✓ %s\n" "$*"; }
+info()   { printf "→ %s\n" "$*"; }
+banner() {
+  printf "\n"
+  printf "═══════════════════════════════════════════════════════════════\n"
+  printf "  %s\n" "$@"
+  printf "═══════════════════════════════════════════════════════════════\n"
+  printf "\n"
+}
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || err "Comando '$1' não encontrado. Instale antes de prosseguir."
@@ -173,19 +189,56 @@ need_cmd python3
 info "Verificando status do bw CLI"
 BW_STATUS=$(bw status | jq -r .status)
 case "$BW_STATUS" in
-  unauthenticated) err "Não logado no bw. Rode: bw login <seu-email>" ;;
-  locked)          info "Bw está locked. Vai pedir a master password agora."
-                   export BW_SESSION=$(bw unlock --raw) ;;
-  unlocked)        ok "Bw já está unlocked" ;;
-  *)               err "Status bw desconhecido: $BW_STATUS" ;;
+  unauthenticated)
+    err "Não logado no bw. Rode primeiro: bw login <email-do-owner-da-org-Aerobi>"
+    ;;
+  locked)
+    banner \
+      "PRÓXIMO PASSO — DIGITE SUA MASTER PASSWORD DO BITWARDEN" \
+      "" \
+      "É a mesma senha que você usa para entrar em" \
+      "  https://vault.aerobi.com.br" \
+      "" \
+      "NÃO é a senha do Ansible Vault — essa só será usada depois," \
+      "automaticamente, lendo de ~/.ansible-vault/aerobi-prod"
+    export BW_SESSION=$(bw unlock --raw)
+    ;;
+  unlocked)
+    ok "Bw já está unlocked (sessão anterior ainda válida)"
+    ;;
+  *)
+    err "Status bw desconhecido: $BW_STATUS"
+    ;;
 esac
 
 bw sync >/dev/null
 ok "Bw sync ok"
 
+# Identificar user logado para diagnóstico
+USER_EMAIL=$(bw status | jq -r .userEmail)
+ok "Logado no bw como: $USER_EMAIL"
+
 ORG_ID=$(get_org_id) || true
-[ -z "${ORG_ID:-}" ] && err "Org '$ORG_NAME' não encontrada no seu cofre. Crie via UI antes."
+[ -z "${ORG_ID:-}" ] && err "Org '$ORG_NAME' não encontrada no seu cofre (user $USER_EMAIL). Crie via UI ou convide este user pra org."
 ok "Org '$ORG_NAME' encontrada (id=${ORG_ID:0:8}...)"
+
+# Validar role na org (0=Owner, 1=Admin, 2=User, 3=Manager).
+# Só Owner/Admin pode criar Collections via API.
+USER_ROLE=$(bw list organizations | jq -r --arg id "$ORG_ID" '.[] | select(.id==$id) | .type')
+ROLE_NAME=""
+case "$USER_ROLE" in
+  0) ROLE_NAME="Owner"   ;;
+  1) ROLE_NAME="Admin"   ;;
+  2) ROLE_NAME="User"    ;;
+  3) ROLE_NAME="Manager" ;;
+  *) ROLE_NAME="Desconhecido (type=$USER_ROLE)" ;;
+esac
+
+if [ "$USER_ROLE" = "0" ] || [ "$USER_ROLE" = "1" ]; then
+  ok "Role do user na org: $ROLE_NAME (permite criar Collections e Items na org)"
+else
+  err "Role do user $USER_EMAIL na org é '$ROLE_NAME', não Owner/Admin.\n  Para rodar este script, faça:\n    bw logout && bw login <email-do-owner>\n  Ou eleve este user a Admin/Owner pela UI da org Aerobi → Members."
+fi
 
 # Garante que todas as collections necessárias existem (cria as faltantes).
 # Ordem dentro do array é não-determinística (associative); para output
@@ -199,7 +252,13 @@ done
 # Decryption de todos os secrets de uma vez (em variáveis locais)
 # -----------------------------------------------------------------------------
 
-info "Decriptando secrets do vault.yml (vai pedir a master do Ansible se não houver vault_password_file)"
+banner \
+  "Decriptando 11 secrets do vault.yml do Ansible" \
+  "" \
+  "Não vai pedir senha — ansible.cfg aponta para" \
+  "  ~/.ansible-vault/aerobi-prod" \
+  "que é a master do Ansible Vault. Se falhar, confira que esse" \
+  "arquivo existe e tem a master correta."
 
 # Cada variável fica em memória deste shell, nunca em disco.
 POSTGRES_PASS=$(decrypt_secret vault_postgres_password) || err "Falha decripta postgres"
