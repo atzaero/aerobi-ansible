@@ -56,6 +56,8 @@ Nada além do baseline. Tudo abaixo é backlog.
 
 1. **Bulk inicial**: rodar [`scripts/migrate-secrets-to-vaultwarden.sh`](../../scripts/migrate-secrets-to-vaultwarden.sh) localmente (mais detalhes no README do script).
 
+   O script cria as Collections faltantes automaticamente (`bw create org-collection`). Você só precisa garantir que a **Org "Aerobi"** existe e que seu user é **owner/admin** dela.
+
 2. **Para serviços futuros**, adicionar um `post_tasks` no playbook do serviço:
    ```yaml
    - name: Espelhar credencial no Vaultwarden (via bw CLI no controller)

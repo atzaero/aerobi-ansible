@@ -19,9 +19,15 @@
 #   2. Configurar:  bw config server https://vault.aerobi.com.br
 #   3. Login:        bw login <seu-email>
 #   4. Conectar à tailnet:  sudo tailscale up
-#   5. Rodar este script:
+#   5. Confirmar que a Org 'Aerobi' existe no Vaultwarden e que seu
+#      user é OWNER ou ADMIN dela (precisa pra criar Collections).
+#   6. Rodar este script:
 #        ./scripts/migrate-secrets-to-vaultwarden.sh
-#   6. Será pedida a master do vault Ansible e a master do Bitwarden.
+#   7. Será pedida a master do vault Ansible e a master do Bitwarden.
+#
+# COLLECTIONS: Se alguma Collection esperada não existir, o script a
+# cria automaticamente via 'bw create org-collection'. Idempotente:
+# rodar de novo não duplica nada.
 #
 # DEPENDÊNCIAS: bw, ansible, jq, yq (snap install yq ou pip)
 
@@ -93,6 +99,32 @@ get_existing_item_id() {
     | head -n1
 }
 
+ensure_collection() {
+  # Cria a Collection se não existir, mantendo idempotência.
+  # Requer que o user logado seja owner/admin da org.
+  local org_id="$1" coll_name="$2"
+  local existing_id
+  existing_id=$(get_collection_id "$org_id" "$coll_name")
+  if [ -n "$existing_id" ]; then
+    ok "Collection '$coll_name' já existe (id=${existing_id:0:8}...)"
+    return 0
+  fi
+
+  info "Criando Collection '$coll_name' na org"
+  bw get template org-collection \
+    | jq --arg org "$org_id" --arg name "$coll_name" '
+        .organizationId = $org
+        | .name = $name
+        | .externalId = null
+        | .groups = []' \
+    | bw encode \
+    | bw create org-collection --organizationid "$org_id" >/dev/null \
+    || err "Falha ao criar Collection '$coll_name'. Confirme que seu user é owner/admin da org."
+
+  bw sync >/dev/null
+  ok "Collection criada: '$coll_name'"
+}
+
 # Cria ou atualiza um item login agrupado.
 # Args:
 #   $1 = collection key (INFRA, APPS, NETWORK, SERVICES, EXTERNAL)
@@ -155,13 +187,12 @@ ORG_ID=$(get_org_id) || true
 [ -z "${ORG_ID:-}" ] && err "Org '$ORG_NAME' não encontrada no seu cofre. Crie via UI antes."
 ok "Org '$ORG_NAME' encontrada (id=${ORG_ID:0:8}...)"
 
-# Verifica que todas as collections necessárias existem
-info "Verificando collections esperadas"
-for key in "${!COLLECTION_NAMES[@]}"; do
-  cname="${COLLECTION_NAMES[$key]}"
-  cid=$(get_collection_id "$ORG_ID" "$cname")
-  [ -z "$cid" ] && err "Collection '$cname' não existe. Crie via UI antes de rodar o script."
-  ok "[$key] '$cname' ok"
+# Garante que todas as collections necessárias existem (cria as faltantes).
+# Ordem dentro do array é não-determinística (associative); para output
+# consistente, iteramos uma lista ordenada por nome.
+info "Garantindo Collections esperadas (cria faltantes automaticamente)"
+for key in INFRA APPS NETWORK SERVICES EXTERNAL; do
+  ensure_collection "$ORG_ID" "${COLLECTION_NAMES[$key]}"
 done
 
 # -----------------------------------------------------------------------------
