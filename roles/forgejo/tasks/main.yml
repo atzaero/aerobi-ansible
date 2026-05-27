@@ -1,0 +1,172 @@
+---
+# Role: forgejo
+#
+# Sobe o Forgejo (Git forge self-hosted) via Docker, reusando o PostgreSQL
+# e o Valkey existentes na rede warpgate. A exposição pública (nginx + TLS)
+# é feita SEPARADAMENTE via playbooks/setup_app.yml (não nesta role) — mesmo
+# padrão de minio/sftpgo/uptime_kuma.
+#
+# SEGURANÇA:
+#   - Porta exposta apenas em 127.0.0.1 — acesso externo via Nginx (regra 2)
+#   - Banco PostgreSQL dedicado (provisionado via postgres_apps)
+#   - Sessão no Postgres (não no Valkey — evita eviction allkeys-lru)
+#   - Cadastro público desabilitado, exige login para ver conteúdo
+#   - no-new-privileges no container
+#   - SECRET_KEY/INTERNAL_TOKEN auto-gerados e persistidos no volume
+#
+# PRÉ-REQUISITOS:
+#   - Docker + rede warpgate (roles docker, docker_network)
+#   - PostgreSQL rodando com banco forgejo provisionado (postgres_databases)
+#   - Valkey rodando (cache)
+#   - Nginx instalado (vhost emitido depois, via setup_app.yml)
+#   - DNS: forgejo_domain apontando para o IP da VPS (para o Certbot depois)
+
+# ----------------------------------------------------------------
+# Validação fail-fast (regra 5)
+# ----------------------------------------------------------------
+
+- name: Validar senha do banco do Forgejo
+  fail:
+    msg: >
+      forgejo_db_password está no default 'changeme' ou vazio.
+      Adicione vault_forgejo_db_password ao vault e referencie no all.yml.
+  when: forgejo_db_password in ['changeme', '', None]
+
+- name: Validar senha do admin do Forgejo
+  fail:
+    msg: >
+      forgejo_admin_password está no default 'changeme' ou vazio.
+      Adicione vault_forgejo_admin_password ao vault e referencie no all.yml.
+  when: forgejo_admin_password in ['changeme', '', None]
+
+- name: Validar senha do Valkey (cache) quando cache habilitado
+  fail:
+    msg: >
+      forgejo_cache_enabled=true mas valkey_password está vazio/changeme.
+      Defina valkey_password (vault_valkey_password) antes de aplicar.
+  when:
+    - forgejo_cache_enabled | bool
+    - valkey_password | default('changeme') in ['changeme', '', None]
+
+# ----------------------------------------------------------------
+# Storage
+# ----------------------------------------------------------------
+
+- name: Garantir diretório de dados do Forgejo
+  file:
+    path: "{{ forgejo_data_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0750"
+
+# ----------------------------------------------------------------
+# Configuração via env (FORGEJO__secao__CHAVE) — mesmo padrão de
+# vaultwarden/minio. O entrypoint converte para app.ini no boot.
+# ----------------------------------------------------------------
+
+- name: Definir env base do Forgejo
+  set_fact:
+    _forgejo_env:
+      USER_UID: "{{ forgejo_uid }}"
+      USER_GID: "{{ forgejo_gid }}"
+      TZ: "{{ forgejo_timezone }}"
+      # Server / URLs (nginx termina o TLS; container fala HTTP)
+      FORGEJO__server__PROTOCOL: "http"
+      FORGEJO__server__HTTP_ADDR: "0.0.0.0"
+      FORGEJO__server__HTTP_PORT: "{{ forgejo_internal_port }}"
+      FORGEJO__server__DOMAIN: "{{ forgejo_domain }}"
+      FORGEJO__server__ROOT_URL: "https://{{ forgejo_domain }}/"
+      FORGEJO__server__SSH_DOMAIN: "{{ forgejo_domain }}"
+      FORGEJO__server__DISABLE_SSH: "{{ forgejo_disable_ssh | string | lower }}"
+      # Database (reusa o postgres da warpgate)
+      FORGEJO__database__DB_TYPE: "postgres"
+      FORGEJO__database__HOST: "{{ postgres_container_name }}:5432"
+      FORGEJO__database__NAME: "{{ forgejo_db_name }}"
+      FORGEJO__database__USER: "{{ forgejo_db_user }}"
+      FORGEJO__database__PASSWD: "{{ forgejo_db_password }}"
+      FORGEJO__database__SSL_MODE: "disable"
+      # Sessão no Postgres (NÃO no Valkey — evita eviction allkeys-lru)
+      FORGEJO__session__PROVIDER: "{{ forgejo_session_provider }}"
+      # Service / política de acesso
+      FORGEJO__service__DISABLE_REGISTRATION: "{{ forgejo_disable_registration | string | lower }}"
+      FORGEJO__service__REQUIRE_SIGNIN_VIEW: "{{ forgejo_require_signin | string | lower }}"
+      # Trava o instalador web (config vem por env, não pela tela /install)
+      FORGEJO__security__INSTALL_LOCK: "true"
+      # Observabilidade
+      FORGEJO__metrics__ENABLED: "{{ forgejo_metrics_enabled | string | lower }}"
+      # Log
+      FORGEJO__log__LEVEL: "{{ forgejo_log_level }}"
+
+- name: Adicionar cache Valkey ao env (quando habilitado)
+  set_fact:
+    _forgejo_env: "{{ _forgejo_env | combine({
+      'FORGEJO__cache__ENABLED': 'true',
+      'FORGEJO__cache__ADAPTER': 'redis',
+      'FORGEJO__cache__HOST': 'redis://:' + valkey_password + '@valkey:6379/' + (forgejo_cache_db_index | string)
+    }) }}"
+  when: forgejo_cache_enabled | bool
+  no_log: true
+
+# ----------------------------------------------------------------
+# Container
+# ----------------------------------------------------------------
+
+- name: Subir container Forgejo {{ forgejo_version }}
+  community.docker.docker_container:
+    name: "{{ forgejo_container_name }}"
+    image: "{{ forgejo_image }}:{{ forgejo_version }}"
+    state: started
+    restart_policy: unless-stopped
+    # NÃO definir `user:` — a imagem normal inicia como root (s6) e dropa
+    # para USER_UID/USER_GID. Definir user quebraria o init.
+    ports:
+      # Expõe apenas em localhost — acesso externo via Nginx
+      - "{{ forgejo_bind_address }}:{{ forgejo_http_port }}:{{ forgejo_internal_port }}"
+    env: "{{ _forgejo_env }}"
+    volumes:
+      - "{{ forgejo_data_dir }}:/data"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+    networks:
+      - name: "{{ docker_network_name }}"
+    security_opts:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:{{ forgejo_internal_port }}/api/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+  notify: Reiniciar Forgejo
+
+- name: Aguardar Forgejo responder em {{ forgejo_bind_address }}:{{ forgejo_http_port }}
+  wait_for:
+    host: "{{ forgejo_bind_address }}"
+    port: "{{ forgejo_http_port }}"
+    delay: 5
+    timeout: 120
+    msg: "Forgejo não respondeu na porta {{ forgejo_http_port }} em 120s"
+
+# ----------------------------------------------------------------
+# Usuário admin inicial (idempotente)
+# ----------------------------------------------------------------
+# `forgejo admin user create` falha se o usuário já existe — tratamos isso
+# como não-erro para a task ser segura em re-execuções.
+
+- name: Criar usuário admin do Forgejo (idempotente)
+  command: >
+    docker exec --user git {{ forgejo_container_name }}
+    forgejo admin user create
+    --admin
+    --username {{ forgejo_admin_user }}
+    --email {{ forgejo_admin_email }}
+    --password {{ forgejo_admin_password }}
+    --must-change-password=false
+  register: forgejo_admin_create
+  changed_when: "'has been successfully created' in (forgejo_admin_create.stdout | default(''))"
+  failed_when:
+    - forgejo_admin_create.rc != 0
+    - "'already exists' not in (forgejo_admin_create.stderr | default(''))"
+    - "'already exists' not in (forgejo_admin_create.stdout | default(''))"
+  no_log: true

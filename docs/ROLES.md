@@ -224,3 +224,35 @@ Permite que clientes SFTP na tailnet conectem direto via `sftp -P 2022 <user>@10
 - SFTP Go rodando em `127.0.0.1:2022` (role `sftpgo`)
 - VPS conectada à tailnet (role `tailscale_client`)
 - `ufw_allow_tailscale_interface: true` (já default em prod)
+
+---
+
+## forgejo
+
+**Playbook:** `setup_forgejo.yml`
+
+**O que faz:**
+- Sobe `codeberg.org/forgejo/forgejo:15.0.2` em container Docker (`restart_policy: unless-stopped`, `no-new-privileges`)
+- Bind `127.0.0.1:3020` (porta interna 3000 do container remapeada — 3000/3010/3333 já em uso)
+- Reusa infra existente: banco dedicado no `postgres` (via `postgres_apps`), cache no `valkey` (db 3), **sessão no Postgres** (evita eviction do `allkeys-lru`)
+- Config via env `FORGEJO__*` (sem `app.ini` templatizado); `SECRET_KEY`/`INTERNAL_TOKEN` auto-gerados e persistidos no volume
+- Cria o usuário admin inicial via CLI (idempotente)
+- Cadastro fechado + exige login; SSH-git desabilitado nesta fase (git via HTTPS+PAT)
+- Valida `forgejo_db_password`/`forgejo_admin_password` não estão em `changeme` (fail-fast)
+
+**Por que importa:**
+Git forge self-hosted para reduzir dependência do GitHub (Actions bloqueado por billing travou o deploy do aerobi-web — issues #95/#93/#96). Forgejo Actions lê `.github/workflows` direto, com registry OCI embutido. Decisão arquitetural completa em [`docs/research/forgejo.md`](research/forgejo.md).
+
+**Pré-requisitos:**
+- `vault_forgejo_db_password` e `vault_forgejo_admin_password` no vault
+- `postgres` e `valkey` rodando; rede docker `warpgate`
+- DNS `git.aerobi.com.br` → IP da VPS (para o Certbot do vhost)
+
+**Exposição (passo separado, após o playbook):**
+```bash
+ansible-playbook playbooks/setup_app.yml \
+  -e "app_name=forgejo app_domain=git.aerobi.com.br app_port=3020 \
+      vhost_websocket_enabled=true vhost_client_max_body_size=1g"
+```
+
+**Não coberto (follow-ups):** Forgejo Runner (CI), SSH-git, migração de repos do GitHub, backup p/ MinIO.

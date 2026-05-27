@@ -8,7 +8,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 |---|---|---|---|
 | 22 | SSH | Internet | CI/CD GitHub Actions e admin manual via chave |
 | 80 | HTTP | Internet | Redireciona para HTTPS via Certbot |
-| 443 | HTTPS | Internet | Nginx serve `aerobi.com.br` + `www` (aerobi-web), `api.aerobi.com.br`, `vault.aerobi.com.br`, `headscale.aerobi.com.br` |
+| 443 | HTTPS | Internet | Nginx serve `aerobi.com.br` + `www` (aerobi-web), `api.aerobi.com.br`, `vault.aerobi.com.br`, `headscale.aerobi.com.br`, `git.aerobi.com.br` (Forgejo) |
 
 ## Portas UDP públicas
 
@@ -23,6 +23,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 | 3000 | aerobi-web | `127.0.0.1` | Apenas via Nginx em `aerobi.com.br` + `www` (Next.js, frontend AEROMAP-BI; cert SAN apex+www via `vhost_server_aliases`) |
 | 3001 | Uptime Kuma | `127.0.0.1` | Apenas via Nginx em `status.aerobi.com.br` (tailnet-only) |
 | 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` (`/admin` tailnet-only) |
+| 3020 | Forgejo | `127.0.0.1` | Apenas via Nginx em `git.aerobi.com.br` (público com TLS). Container escuta em `:3000`, remapeado para 3020 no host. Git via HTTPS+PAT (SSH-git fica p/ fase 2) |
 | 3333 | aerobi-api | `127.0.0.1` | Apenas via Nginx em `api.aerobi.com.br` |
 | 5432 | PostgreSQL 17 | `127.0.0.1` (apps) + `100.64.0.1` (tailnet via socat sidecar) | Apps via rede docker `warpgate`; admin via DBeaver direto em `100.64.0.1:5432` (sem SSH tunnel — issue #7 fechada via `roles/postgres_tailnet_proxy/`) |
 | 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |

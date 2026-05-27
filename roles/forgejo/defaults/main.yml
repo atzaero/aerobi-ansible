@@ -1,0 +1,96 @@
+---
+# Defaults: forgejo
+#
+# Forgejo (fork comunitário do Gitea) — Git forge self-hosted + Actions.
+# Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
+#
+# Decisão arquitetural (ver docs/research/forgejo.md):
+#   - DB reusa o PostgreSQL existente (warpgate), provisionado via postgres_apps
+#   - CACHE no Valkey existente; SESSÃO no Postgres (evita eviction do allkeys-lru)
+#   - Sem container de Postgres/Redis/Registry novos — registry é embutido
+
+# ------------------------------------------------------------
+# Imagem e versão
+# ------------------------------------------------------------
+# Pin explícito. Bump de major exige ler release notes (migração de schema
+# automática no boot, mas ler https://forgejo.org/releases/ antes).
+# Validar com `docker manifest inspect <imagem>:<tag>` antes de aplicar.
+#
+# IMPORTANTE: usar a imagem NORMAL (não -rootless). Ela inicia como root
+# (s6 init) e dropa para o usuário git definido por USER_UID/USER_GID — por
+# isso NÃO se define `user:` no docker_container (quebraria o init). Os
+# arquivos no volume saem com owner USER_UID:USER_GID = 1001 (= deploy).
+forgejo_image: codeberg.org/forgejo/forgejo
+forgejo_version: "15.0.2"
+forgejo_container_name: forgejo
+
+# ------------------------------------------------------------
+# Rede e portas
+# ------------------------------------------------------------
+# Bind 127.0.0.1 only — exposição pública é responsabilidade do nginx_vhost
+# (TLS via Certbot). Porta interna do container é 3000; no host mapeia 3020
+# (3000/3001/3010/3333 já em uso — ver docs/PORTAS.md).
+forgejo_bind_address: "127.0.0.1"
+forgejo_http_port: 3020
+forgejo_internal_port: 3000
+
+docker_network_name: warpgate
+
+# UID/GID do usuário git dentro do container. 1001:1001 alinha com o deploy
+# em prod (dono do data_dir) — evita arquivos root no host.
+forgejo_uid: 1001
+forgejo_gid: 1001
+
+# ------------------------------------------------------------
+# Storage em disco (host)
+# ------------------------------------------------------------
+# Diretório host com acesso do deploy — necessário para backup/dump dos
+# repositórios. Layout interno: /data/gitea (conf, log) + /data/git (repos).
+forgejo_data_dir: "/home/{{ deploy_user }}/forgejo/data"
+
+# ------------------------------------------------------------
+# Domínio público
+# ------------------------------------------------------------
+# DNS A no Registro.br apontando para a VPS ANTES do setup_app.yml (Certbot).
+forgejo_domain: "git.aerobi.com.br"
+
+# ------------------------------------------------------------
+# Banco de dados (reusa o postgres da warpgate — deve casar com postgres_apps)
+# ------------------------------------------------------------
+forgejo_db_name: forgejo
+forgejo_db_user: forgejo_user
+forgejo_db_password: changeme        # prod: "{{ vault_forgejo_db_password }}"
+
+# ------------------------------------------------------------
+# Cache (Valkey existente) — DB index dedicado, só cache (descartável).
+# Sessão NÃO usa Valkey (ver forgejo_session_provider).
+# ------------------------------------------------------------
+forgejo_cache_enabled: true
+forgejo_cache_db_index: 3
+# valkey_password vem do inventory/vault (compartilhado com a role valkey).
+
+# Sessão no Postgres — sobrevive a eviction do Valkey (allkeys-lru).
+forgejo_session_provider: db
+
+# ------------------------------------------------------------
+# Segurança / política de acesso
+# ------------------------------------------------------------
+# Instância privada-first: cadastro fechado, exige login para ver conteúdo.
+forgejo_disable_registration: true
+forgejo_require_signin: true
+# SSH-git desabilitado nesta fase (git via HTTPS+PAT). Fase 2 abre SSH.
+forgejo_disable_ssh: true
+# /metrics nativo para observabilidade (uptime-kuma/Prometheus futuro).
+forgejo_metrics_enabled: true
+
+forgejo_log_level: "info"
+
+# ------------------------------------------------------------
+# Usuário admin inicial (criado via CLI no primeiro apply)
+# ------------------------------------------------------------
+forgejo_admin_user: aerobi-admin
+forgejo_admin_email: "admin@aerobi.com.br"
+forgejo_admin_password: changeme     # prod: "{{ vault_forgejo_admin_password }}"
+
+# Timezone (logs/timestamps coerentes com o resto da stack)
+forgejo_timezone: "America/Sao_Paulo"
