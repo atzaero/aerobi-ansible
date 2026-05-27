@@ -68,13 +68,15 @@
 - name: Definir env base do Forgejo
   set_fact:
     _forgejo_env:
-      USER_UID: "{{ forgejo_uid }}"
-      USER_GID: "{{ forgejo_gid }}"
+      # | string obrigatório: jinja2 native types renderiza ints como int,
+      # mas docker_container exige todos os valores de env como string.
+      USER_UID: "{{ forgejo_uid | string }}"
+      USER_GID: "{{ forgejo_gid | string }}"
       TZ: "{{ forgejo_timezone }}"
       # Server / URLs (nginx termina o TLS; container fala HTTP)
       FORGEJO__server__PROTOCOL: "http"
       FORGEJO__server__HTTP_ADDR: "0.0.0.0"
-      FORGEJO__server__HTTP_PORT: "{{ forgejo_internal_port }}"
+      FORGEJO__server__HTTP_PORT: "{{ forgejo_internal_port | string }}"
       FORGEJO__server__DOMAIN: "{{ forgejo_domain }}"
       FORGEJO__server__ROOT_URL: "https://{{ forgejo_domain }}/"
       FORGEJO__server__SSH_DOMAIN: "{{ forgejo_domain }}"
