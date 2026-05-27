@@ -8,7 +8,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 |---|---|---|---|
 | 22 | SSH | Internet | CI/CD GitHub Actions e admin manual via chave |
 | 80 | HTTP | Internet | Redireciona para HTTPS via Certbot |
-| 443 | HTTPS | Internet | Nginx serve `api.aerobi.com.br`, `vault.aerobi.com.br`, `headscale.aerobi.com.br` (e `aerobi.com.br` + `www` após o cutover do `aerobi-web`) |
+| 443 | HTTPS | Internet | Nginx serve `aerobi.com.br` + `www` (aerobi-web), `api.aerobi.com.br`, `vault.aerobi.com.br`, `headscale.aerobi.com.br` |
 
 ## Portas UDP públicas
 
@@ -20,7 +20,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 
 | Porta | Serviço | Bind | Acesso |
 |---|---|---|---|
-| 3000 | aerobi-web | `127.0.0.1` | Apenas via Nginx em `aerobi.com.br` + `www` (Next.js; **migração** Firebase → VPS, cutover de DNS pendente — issue de follow-up de #93) |
+| 3000 | aerobi-web | `127.0.0.1` | Apenas via Nginx em `aerobi.com.br` + `www` (Next.js, frontend AEROMAP-BI; cert SAN apex+www via `vhost_server_aliases`) |
 | 3001 | Uptime Kuma | `127.0.0.1` | Apenas via Nginx em `status.aerobi.com.br` (tailnet-only) |
 | 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` (`/admin` tailnet-only) |
 | 3333 | aerobi-api | `127.0.0.1` | Apenas via Nginx em `api.aerobi.com.br` |
