@@ -12,6 +12,8 @@ Subdomínios em uso ou previstos:
 
 | Subdomínio | Tipo | Valor | TTL | Serviço | Provisionado por |
 |---|---|---|---|---|---|
+| `@` (apex) | A | `187.127.6.20` | 3600 | `aerobi-web` | **cutover pendente** — hoje `35.219.200.207` (Firebase). Ver "Cutover de apex" abaixo |
+| `www` | A | `187.127.6.20` | 3600 | `aerobi-web` | **cutover pendente** — hoje `35.219.200.207` (Firebase). Vira junto com o apex |
 | `api` | A | `187.127.6.20` | 3600 | `aerobi-api` | `setup_app.yml` |
 | `vault` | A | `187.127.6.20` | 3600 | Vaultwarden | `setup_vaultwarden.yml` |
 | `headscale` | A | `187.127.6.20` | 3600 | Headscale | `setup_headscale.yml` |
@@ -80,6 +82,22 @@ ansible-playbook playbooks/setup_<servico>.yml
 ansible-playbook playbooks/setup_app.yml \
   -e "app_name=<servico> app_domain=<sub>.aerobi.com.br app_port=<porta> [flags]"
 ```
+
+## Cutover de apex (migração Firebase → VPS)
+
+O apex `aerobi.com.br` (+ `www`) hoje aponta para o Firebase App Hosting (`35.219.200.207`). Virar o
+A para a VPS exige cuidado: o Certbot só emite o cert com o domínio já resolvendo para `187.127.6.20`,
+mas virar antes do container estar de pé derruba a produção.
+
+Passos **manuais no painel** (a parte automatizável — vhost/SSL — está em
+[`DEPLOY_APP.md → Cutover de apex`](DEPLOY_APP.md#cutover-de-apex-migração-de-provedor--vps)):
+
+1. **~1h antes:** editar o A de `aerobi.com.br` e `www`, baixar TTL `3600 → 60` (rollback rápido).
+2. No momento do cutover (com o vhost só-HTTP já criado e o container de pé): trocar o **Dados** do A de
+   `35.219.200.207 → 187.127.6.20` para o apex e o `www`. Publicar a zona.
+3. Validar propagação (`dig +short aerobi.com.br @1.1.1.1 → 187.127.6.20`) antes de emitir o cert.
+
+**Rollback:** reverter o A para `35.219.200.207`. Com TTL 60, volta em minutos.
 
 ## NS / autoritativo
 
