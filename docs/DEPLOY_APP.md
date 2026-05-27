@@ -1,204 +1,190 @@
-# Deploy de Aplicações
+# Deploy de aplicações
 
-Este documento explica como subir uma nova aplicação no servidor usando o Ansible e GitHub Actions.
+Como subir uma aplicação de produto na VPS aerobi (`187.127.6.20`) usando Ansible (infra)
++ GitHub Actions (deploy contínuo). Padrão: container Docker bind em `127.0.0.1`, imagem no
+GHCR, atrás do nginx do host com TLS via Let's Encrypt.
 
-## Visão geral
+## Divisão de responsabilidades
 
-O Ansible cuida da **infraestrutura** (uma vez por aplicação):
-- Criação do registro DNS apontando para o servidor
-- Provisionamento do banco de dados PostgreSQL (se necessário)
-- Criação do diretório da app no servidor
-- Configuração do virtual host Nginx (reverse proxy)
-- Emissão do certificado SSL via Let's Encrypt
+O **Ansible** (este repo) cuida da **infra**, uma vez por aplicação:
+- Diretório da app em `/home/deploy/apps/<app_name>` (a role cria; o workflow de deploy também
+  garante com `mkdir -p`).
+- Virtual host nginx (reverse proxy para `127.0.0.1:<porta>`).
+- Certificado SSL via Certbot (`roles/nginx_vhost`, flag `--reinstall`).
 
-O **GitHub Actions** cuida do deploy contínuo (a cada release):
-- Build da imagem Docker
-- Publicação no GitHub Container Registry (GHCR)
-- Transferência do `.env` e `docker-compose.prod.yml` para o servidor
-- Execução do `docker compose up -d`
+O **GitHub Actions** (no repo da app) cuida do **deploy contínuo**, a cada push na `main`:
+- `semantic-release` cria a tag/release.
+- Build da imagem Docker e push no GitHub Container Registry (GHCR).
+- Via SSH: transfere `docker-compose.yml` + `.env`, `docker compose pull && up -d`.
+
+> O container expõe a porta **apenas em `127.0.0.1`** e entra na rede Docker `warpgate`
+> (`external: true`). Exposição pública (TLS) é responsabilidade do nginx — nunca publique a
+> porta em `0.0.0.0` nem via `-p` em IP público (Docker NAT fura o UFW — ver CLAUDE.md regra 2).
+
+## Apps de produto na VPS
+
+| App | Domínio | Porta interna | Repo | Estado |
+|---|---|---|---|---|
+| `aerobi-api` | `api.aerobi.com.br` | 3333 | `atzaero/aerobi-api` | produção |
+| `aerobi-web` | `aerobi.com.br` + `www` | 3000 | `atzaero/aerobi` | **migração** (Firebase → VPS; cutover de DNS pendente) |
+
+Infra compartilhada (Vaultwarden, MinIO, Headscale, etc) está em [`DOMINIOS.md`](DOMINIOS.md)
+e [`PORTAS.md`](PORTAS.md).
 
 ---
 
-## Pré-requisitos
+## Passo a passo — nova aplicação
 
-Antes de começar, certifique-se de que:
+### 1. Escolher a porta interna
 
-1. `setup_vps.yml` já foi executado (Nginx instalado)
-2. As portas 80 e 443 estão abertas no firewall (já configurado)
+Cada app escuta numa porta distinta em `127.0.0.1`. Consulte o mapa em [`PORTAS.md`](PORTAS.md)
+e a tabela acima antes de alocar.
 
----
+### 2. Criar o registro DNS (Registro.br)
 
-## Passo a passo para uma nova aplicação
-
-### 1. Escolha uma porta interna
-
-Cada aplicação precisa de uma porta diferente no servidor. Controle quais estão em uso:
-
-| Aplicação         | Domínio               | Porta |
-|-------------------|-----------------------|-------|
-| elvisea_portfolio | elvisea.dev           | 3003  |
-| viki_assistant    | (a definir)           | 3001  |
-| barber_shop       | (a definir)           | 3002  |
-| aerobi            | aerobi.elvisea.dev    | 3333  |
-
-### 2. Crie o registro DNS
-
-Aponte o domínio/subdomínio para o IP do servidor (`195.200.1.191`) via MCP da Hostinger ou painel de DNS.
-
-Usando o MCP (Claude Code):
-```
-criar registro DNS: <subdominio>.elvisea.dev → A → 195.200.1.191
-```
-
-Aguarde a propagação antes de executar o playbook (necessário para emissão do SSL).
-
-### 3. Provisione o banco de dados (se a app usar PostgreSQL)
-
-Adicione a app em `inventory/prod/group_vars/all/all.yml`, na seção `postgres_apps`:
-
-```yaml
-postgres_apps:
-  - name: nome_da_app
-    db: nome_da_app
-    user: nome_user
-    password: "{{ vault_nome_da_app_db_password }}"
-```
-
-Adicione a senha no vault:
+A zona `aerobi.com.br` é gerenciada no **Registro.br** (NS `*.sec.dns.br`), **não** no Hostinger
+— o MCP da Hostinger não edita esse DNS. Crie o A `<sub> → 187.127.6.20` pelo painel e aguarde
+propagar. Procedimento detalhado em [`REGISTRO_BR.md`](REGISTRO_BR.md).
 
 ```bash
-ansible-vault edit inventory/prod/group_vars/all/vault.yml
+dig +short <sub>.aerobi.com.br @1.1.1.1   # deve retornar 187.127.6.20
 ```
 
-Execute o playbook de bancos:
+O Certbot valida via HTTP-01 — **sem DNS resolvendo para a VPS, a emissão do cert falha**.
 
-```bash
-ansible-playbook playbooks/setup_app_databases.yml
-```
+### 3. Banco de dados (só se a app usar PostgreSQL)
 
-### 4. Execute o playbook `setup_app.yml`
+Adicione a app em `inventory/prod/group_vars/all/all.yml` (`postgres_apps`), a senha no vault, e
+rode `ansible-playbook playbooks/setup_app_databases.yml`. (O `aerobi-web` usa Firebase — não
+precisa deste passo.)
 
-```bash
-cd /home/elvis/projects/ansible-vps
-source .venv/bin/activate
-
-ansible-playbook playbooks/setup_app.yml \
-  -e "app_name=nome_da_app app_domain=dominio.com app_port=3001"
-```
-
-**Parâmetros:**
-
-| Parâmetro    | Descrição                              | Exemplo                  |
-|--------------|----------------------------------------|--------------------------|
-| `app_name`   | Identificador único, sem espaços       | `aerobi`                 |
-| `app_domain` | Domínio público apontando pro servidor | `aerobi.elvisea.dev`     |
-| `app_port`   | Porta interna do container Docker      | `3333`                   |
-
-**Exemplo para o aerobi:**
+### 4. Provisionar vhost + SSL
 
 ```bash
 ansible-playbook playbooks/setup_app.yml \
-  -e "app_name=aerobi app_domain=aerobi.elvisea.dev app_port=3333"
+  -e "app_name=<app> app_domain=<dominio> app_port=<porta>"
 ```
 
-O playbook irá:
-- Criar `/home/deploy/apps/aerobi/`
-- Criar `/etc/nginx/sites-available/aerobi`
-- Habilitar o site e recarregar o Nginx
-- Emitir o certificado SSL via Certbot (Let's Encrypt)
+Flags opcionais (lidas direto pela role `nginx_vhost`):
 
-### 5. Configure o `docker-compose.prod.yml` da aplicação
+| Flag | Para quê |
+|---|---|
+| `vhost_client_max_body_size=12m` | Override do default 1m do nginx (uploads grandes). |
+| `vhost_server_aliases=['www.aerobi.com.br']` | Domínios extras no mesmo vhost/cert (passar via `-e` JSON). |
+| `vhost_websocket_enabled=true` | Apps com WebSocket (MinIO console, Uptime Kuma). |
+| `vhost_tailnet_only=true` | Restringe ao range tailnet `100.64.0.0/10` (admin-only). |
+| `vhost_emit_cert=false` | Cria só o vhost HTTP, pula o Certbot (1ª passada de cutover — ver abaixo). |
 
-A aplicação precisa expor a porta apenas em `localhost`. Exemplo:
+**Exemplo `aerobi-web`** (apex + www, upload de documentos do Next `bodySizeLimit=10mb`):
+
+```bash
+ansible-playbook playbooks/setup_app.yml \
+  -e '{"app_name":"aerobi-web","app_domain":"aerobi.com.br","app_port":3000,"vhost_client_max_body_size":"12m","vhost_server_aliases":["www.aerobi.com.br"]}'
+```
+
+> `vhost_client_max_body_size=12m` é **obrigatório** no `aerobi-web`: sem ele, o upload de
+> documentos (até 10mb) retorna **413** (default nginx = 1m).
+
+### 5. `docker-compose.yml` no repo da app
+
+Bind apenas em loopback, rede `warpgate` externa:
 
 ```yaml
 services:
-  minha_app:
-    image: ${REGISTRY}/${IMAGE_NAME}:latest
+  web:
+    image: ${REGISTRY}/${IMAGE_NAME}:${TAG}
     ports:
-      - "127.0.0.1:3001:3001"   # nunca "3001:3001" (expõe para internet)
-    networks:
-      - warpgate
-
+      - "127.0.0.1:3000:3000"   # nunca "3000:3000" (expõe à internet)
+    networks: [warpgate]
 networks:
   warpgate:
     external: true
 ```
 
-### 6. Configure os GitHub Secrets no repositório da aplicação
+### 6. GitHub Secrets no repo da app
 
-Acesse `Settings → Secrets and variables → Actions` e adicione:
+`Settings → Secrets and variables → Actions` (ou Environment `prod`):
 
-| Secret            | Valor                                   |
-|-------------------|-----------------------------------------|
-| `SSH_PRIVATE_KEY` | Chave privada `github-actions-cicd`     |
-| `REMOTE_USER`     | `deploy`                                |
-| `REMOTE_TARGET`   | `/home/deploy/apps/<app_name>`          |
-| `REMOTE_HOST`     | `195.200.1.191`                         |
-| `REMOTE_PORT`     | `22`                                    |
-| + demais vars     | Variáveis específicas da aplicação      |
+| Secret | Valor |
+|---|---|
+| `SSH_PRIVATE_KEY` | Chave privada `github-actions-cicd` (compartilhada entre os apps). |
+| `REMOTE_USER` | `deploy` |
+| `REMOTE_HOST` | `187.127.6.20` |
+| `REMOTE_PORT` | `22` |
+| `REMOTE_TARGET` | `/home/deploy/apps/<app_name>` |
+| `GH_TOKEN` | PAT para GHCR/releases. |
+| + vars da app | NEXT_PUBLIC_*, runtime, etc. |
 
-> A `SSH_PRIVATE_KEY` é compartilhada entre todos os projetos.
-> Se precisar regerar, consulte o README principal.
+### 7. Disparar o deploy
 
-### 7. Publique uma release para disparar o deploy
-
-O pipeline do GitHub Actions é disparado ao publicar uma release. Ele irá automaticamente:
-1. Fazer build da imagem Docker
-2. Publicar no GitHub Container Registry (GHCR)
-3. Conectar ao servidor via SSH
-4. Transferir o `.env` e o `docker-compose.prod.yml`
-5. Executar `docker compose up -d`
+Push na `main` do repo da app → o pipeline builda, publica no GHCR e faz `docker compose up -d`
+na VPS.
 
 ---
 
-## Verificando a aplicação no servidor
+## Cutover de apex (migração de provedor → VPS)
 
-```bash
-# Ver containers rodando
-ssh deploy@195.200.1.191 "docker ps"
+Quando o domínio **já está em produção em outro provedor** (ex: `aerobi.com.br` no Firebase App
+Hosting) e vamos virar o A para a VPS, há uma tensão de ordem: o Certbot (HTTP-01) só emite o cert
+com o domínio **já resolvendo para a VPS**, mas virar o A antes do app estar de pé **derruba a
+produção**. O nginx da VPS não tem `default_server` — sem o vhost, um A apontado para a VPS cai
+num vhost arbitrário.
 
-# Ver logs de uma aplicação
-ssh deploy@195.200.1.191 "docker logs elvisea_portfolio --tail 50"
+Sequência de **2 passadas** (downtime funcional ~0; janela HTTP-only de minutos):
 
-# Ver config do Nginx
-ssh deploy@195.200.1.191 "cat /etc/nginx/sites-available/elvisea_portfolio"
-```
+**Pré-condição:** container já rodando na VPS (`127.0.0.1:<porta>`, healthcheck ok).
+
+0. **(Registro.br, ~1h antes)** baixar o TTL do A de `aerobi.com.br` e `www` para `60` (rollback rápido).
+1. **Validar o container:**
+   ```bash
+   ssh deploy@187.127.6.20 "docker ps | grep aerobi-web"
+   ssh deploy@187.127.6.20 "curl -sf http://127.0.0.1:3000/api/health"
+   ```
+2. **1ª passada — vhost só-HTTP, sem cert** (produção ainda no provedor antigo):
+   ```bash
+   ansible-playbook playbooks/setup_app.yml \
+     -e '{"app_name":"aerobi-web","app_domain":"aerobi.com.br","app_port":3000,"vhost_client_max_body_size":"12m","vhost_server_aliases":["www.aerobi.com.br"],"vhost_emit_cert":false}'
+   # valida via Host header (sem depender do DNS):
+   ssh deploy@187.127.6.20 'curl -s -H "Host: aerobi.com.br" http://127.0.0.1/api/health'
+   ```
+3. **(Registro.br, manual)** virar o A de `aerobi.com.br` e `www`: `35.219.200.207 → 187.127.6.20`.
+4. **Aguardar propagação:**
+   ```bash
+   for r in 1.1.1.1 8.8.8.8 9.9.9.9; do dig +short aerobi.com.br @$r; done   # → 187.127.6.20
+   ```
+5. **2ª passada — emite cert (apex + www) e ativa redirect 80→443:**
+   ```bash
+   ansible-playbook playbooks/setup_app.yml \
+     -e '{"app_name":"aerobi-web","app_domain":"aerobi.com.br","app_port":3000,"vhost_client_max_body_size":"12m","vhost_server_aliases":["www.aerobi.com.br"]}'
+   ```
+6. **Validar:** `curl -I https://aerobi.com.br` e `https://www.aerobi.com.br` (200 + SSL válido),
+   upload de ~10mb sem 413, `api.aerobi.com.br` intacto.
+
+**Rollback:** reverter o A para o IP antigo no Registro.br (com TTL 60, volta em minutos). O
+container e o vhost na VPS ficam inertes sem DNS.
 
 ---
 
-## Renovação do SSL
-
-O Certbot configura renovação automática via `systemd timer`. Para verificar:
+## Operação
 
 ```bash
-ssh root@195.200.1.191 "systemctl status certbot.timer"
+# Containers rodando
+ssh deploy@187.127.6.20 "docker ps"
+
+# Logs de uma app
+ssh deploy@187.127.6.20 "docker logs aerobi-web --tail 50"
+
+# Config do vhost
+ssh deploy@187.127.6.20 "cat /etc/nginx/sites-available/aerobi-web"
 ```
 
-Para renovar manualmente (se necessário):
+**Renovação SSL:** automática via `systemd timer` do Certbot.
+`ssh deploy@187.127.6.20 "sudo certbot renew --dry-run"` para testar.
+
+### Remover uma app
 
 ```bash
-ssh root@195.200.1.191 "certbot renew --dry-run"
-```
-
----
-
-## Removendo uma aplicação
-
-```bash
-# 1. No servidor — parar e remover o container
-ssh deploy@195.200.1.191 "cd ~/apps/<app_name> && docker compose down"
-
-# 2. Remover diretório
-ssh deploy@195.200.1.191 "rm -rf ~/apps/<app_name>"
-
-# 3. Remover virtual host Nginx
-ssh root@195.200.1.191 "
-  rm /etc/nginx/sites-enabled/<app_name>
-  rm /etc/nginx/sites-available/<app_name>
-  nginx -t && systemctl reload nginx
-"
-
-# 4. Revogar certificado SSL (opcional)
-ssh root@195.200.1.191 "certbot delete --cert-name <dominio>"
+ssh deploy@187.127.6.20 "cd ~/apps/<app> && docker compose down && rm -rf ~/apps/<app>"
+ssh deploy@187.127.6.20 "sudo rm /etc/nginx/sites-{enabled,available}/<app> && sudo nginx -t && sudo systemctl reload nginx"
+ssh deploy@187.127.6.20 "sudo certbot delete --cert-name <dominio>"   # opcional
 ```
