@@ -7,7 +7,7 @@
 
 server {
     listen 80;
-    server_name {{ vhost_domain }};
+    server_name {{ vhost_domain }}{% for alias in vhost_server_aliases | default([]) %} {{ alias }}{% endfor %};
 
 {% if vhost_client_max_body_size is defined %}
     # Tamanho máximo de upload (override default 1m do nginx).

@@ -13,6 +13,18 @@ vhost_port: 3000
 # Nome identificador da aplicação (usado para nomear arquivos e diretório)
 vhost_app_name: ""
 
+# Domínios adicionais servidos pelo mesmo vhost (ex: www.aerobi.com.br).
+# Entram no `server_name` e como `-d` extra no Certbot (cert SAN único).
+vhost_server_aliases: []
+
+# Emitir/instalar o certificado SSL nesta execução.
+# true (default): comportamento normal — cria vhost e roda Certbot.
+# false: cria só o vhost HTTP (listen 80), pula o Certbot. Usado na 1ª
+#        passada de um cutover de apex (vhost precisa existir antes do
+#        flip de DNS; o cert só emite depois que o domínio resolve para
+#        a VPS, no HTTP-01). Ver docs/DEPLOY_APP.md → "Cutover de apex".
+vhost_emit_cert: true
+
 # ------------------------------------------------------------
 # Parâmetros opcionais — só ativam se passados via -e ou role vars.
 # Não definimos default aqui para que o template use `is defined` /

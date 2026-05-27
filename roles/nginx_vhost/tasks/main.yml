@@ -62,6 +62,13 @@
 - name: Recarregar Nginx antes de emitir certificado
   meta: flush_handlers
 
+- name: Montar lista de domínios (-d) para o Certbot
+  # Domínio principal + aliases (ex: www). Vira um único cert SAN.
+  set_fact:
+    certbot_domain_args: >-
+      -d {{ ([vhost_domain] + (vhost_server_aliases | default([]))) | join(' -d ') }}
+  when: vhost_emit_cert | default(true) | bool
+
 - name: Emitir e (re)instalar certificado SSL via Certbot para {{ vhost_domain }}
   # --reinstall garante que o vhost sempre recebe o bloco `listen 443 ssl;`
   # mesmo quando o cert já existe (idempotente — não re-emite cert válido).
@@ -70,11 +77,16 @@
   # emitia o cert mas o arquivo em /etc/nginx/sites-available/ ficava
   # apenas com `listen 80;`. --reinstall + remoção de `creates:` elimina
   # o race.
+  #
+  # vhost_emit_cert=false pula esta task: cria só o vhost HTTP (listen 80),
+  # necessário antes do flip de DNS num cutover de apex (HTTP-01 só valida
+  # depois que o domínio resolve para a VPS). Ver docs/DEPLOY_APP.md.
   command: >
     certbot --nginx
-    -d {{ vhost_domain }}
+    {{ certbot_domain_args }}
     --non-interactive
     --agree-tos
     -m {{ deploy_email }}
     --redirect
     --reinstall
+  when: vhost_emit_cert | default(true) | bool
