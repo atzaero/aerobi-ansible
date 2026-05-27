@@ -1,0 +1,8 @@
+---
+# Handlers: forgejo
+
+- name: Reiniciar Forgejo
+  community.docker.docker_container:
+    name: "{{ forgejo_container_name }}"
+    state: started
+    restart: yes

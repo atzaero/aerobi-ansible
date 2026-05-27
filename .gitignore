@@ -6,6 +6,9 @@
 .env
 secrets/
 
+# Config local de MCP servers (contém tokens — manter só na máquina)
+.mcp.json
+
 # Senhas do Ansible Vault (nunca versionar)
 .vault_pass*
 vault_pass*
