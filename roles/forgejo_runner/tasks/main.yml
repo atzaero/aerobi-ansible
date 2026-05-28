@@ -61,7 +61,8 @@
   register: _runner_file
 
 - name: Gerar registration token efêmero
-  command: docker exec {{ forgejo_container_name }} forgejo actions generate-runner-token
+  # -u git: o binário forgejo recusa rodar como root (uid padrão do exec).
+  command: docker exec -u git {{ forgejo_container_name }} forgejo actions generate-runner-token
   register: _reg_token
   changed_when: false
   no_log: true
