@@ -255,4 +255,29 @@ ansible-playbook playbooks/setup_app.yml \
       vhost_websocket_enabled=true vhost_client_max_body_size=1g"
 ```
 
-**Não coberto (follow-ups):** Forgejo Runner (CI), SSH-git, migração de repos do GitHub, backup p/ MinIO.
+**Não coberto (follow-ups):** SSH-git, backup p/ MinIO.
+
+---
+
+## forgejo_runner
+
+**Playbook:** `setup_forgejo_runner.yml`
+
+**O que faz:**
+- Sobe `code.forgejo.org/forgejo/runner:12.10.2` e registra na instância (`git.aerobi.com.br`)
+- Jobs rodam como containers no **Docker do host** (socket montado): build de imagem, service containers (ex: postgres de teste) e **deploy** direto na warpgate, sem SSH
+- Labels mapeiam `runs-on` → imagem de job (`ubuntu-latest` → `catthehacker/ubuntu:act-22.04`)
+- `capacity: 1` (1 job por vez — protege a VPS de produção)
+- Registro idempotente com token efêmero (`forgejo actions generate-runner-token`) — sem secret no vault
+- Container roda como **root** (a imagem é uid 1000, que não acessa o `docker.sock`; o sock já é root-equivalente)
+
+**Por que importa:**
+Motor de CI que faz os pipelines voltarem a rodar self-hosted (dor original: GitHub Actions travado por billing). Consome os secrets de app migrados para os repos.
+
+**Pré-requisitos:**
+- `forgejo` rodando com Actions habilitado (`FORGEJO__actions__ENABLED=true`)
+- Docker + rede `warpgate`
+
+**Validar:** Site Admin → Actions → Runners (`vps-runner` online) + smoke test (`.forgejo/workflows/`).
+
+**Não coberto (follow-up, nos repos dos apps):** migração de `ci.yml`/`release.yml` (registry GHCR→Forgejo, plugin Forgejo do semantic-release, deploy local em vez de SSH).

@@ -95,6 +95,9 @@
       FORGEJO__service__REQUIRE_SIGNIN_VIEW: "{{ forgejo_require_signin | string | lower }}"
       # Trava o instalador web (config vem por env, não pela tela /install)
       FORGEJO__security__INSTALL_LOCK: "true"
+      # Actions (CI) habilitado — explícito (é default no Forgejo 15, mas
+      # declaramos para o runner não depender de comportamento implícito).
+      FORGEJO__actions__ENABLED: "true"
       # Observabilidade
       FORGEJO__metrics__ENABLED: "{{ forgejo_metrics_enabled | string | lower }}"
       # Log

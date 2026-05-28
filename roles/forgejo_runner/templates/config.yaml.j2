@@ -1,0 +1,32 @@
+# {{ ansible_managed }}
+# Config do Forgejo Actions Runner. WORKDIR do container = /data.
+log:
+  level: {{ forgejo_runner_log_level }}
+
+runner:
+  file: .runner
+  # Jobs simultâneos. Limitado para não saturar a VPS de produção.
+  capacity: {{ forgejo_runner_capacity }}
+  timeout: 3h
+  insecure: false
+  fetch_timeout: 5s
+  fetch_interval: 2s
+  # Vazio: usa as labels definidas no register (.runner).
+  labels: []
+
+cache:
+  # Cache server embutido (para actions/cache). Auto-detecta host na rede docker.
+  enabled: true
+
+container:
+  # Job containers entram na warpgate (alcançam postgres/valkey/apps).
+  network: "{{ docker_network_name }}"
+  privileged: false
+  # Injeta o socket do host em cada job → steps podem rodar docker build/compose.
+  options: "-v /var/run/docker.sock:/var/run/docker.sock"
+  valid_volumes:
+    - /var/run/docker.sock
+  force_pull: false
+
+host:
+  workdir_parent: ""
