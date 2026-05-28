@@ -27,10 +27,15 @@ container:
   # próprio compose (networks.external). Isolamento por job é o correto p/ CI.
   network: ""
   privileged: false
-  # Injeta o socket do host em cada job → steps podem rodar docker build/compose.
-  options: "-v /var/run/docker.sock:/var/run/docker.sock"
+  # options injetadas em CADA container de job:
+  #  - docker.sock do host → steps rodam docker build/compose
+  #  - toolcache persistente → setup-node reusa o Node 22 entre runs (não rebaixa)
+  #  - RUNNER_TOOL_CACHE explícito → garante que o setup-node use o volume montado
+  #  - --memory → confina um eventual OOM ao job (VPS sem swap)
+  options: "-v /var/run/docker.sock:/var/run/docker.sock -v {{ forgejo_runner_toolcache_dir }}:/opt/hostedtoolcache -e RUNNER_TOOL_CACHE=/opt/hostedtoolcache --memory={{ forgejo_runner_job_memory }}"
   valid_volumes:
     - /var/run/docker.sock
+    - "{{ forgejo_runner_toolcache_dir }}"
   force_pull: false
 
 host:

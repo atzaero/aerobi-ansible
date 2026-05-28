@@ -30,9 +30,17 @@ Defaults em `defaults/main.yml`:
 | Var | Default | Nota |
 |---|---|---|
 | `forgejo_runner_version` | `12.10.2` | pin verificado com `docker manifest inspect` |
-| `forgejo_runner_capacity` | `1` | jobs simultâneos — subir quando houver folga na VPS |
+| `forgejo_runner_capacity` | `2` | jobs simultâneos (validado: 14Gi RAM livres). Subir mais só monitorando CPU/RAM (sem swap) |
+| `forgejo_runner_job_memory` | `4g` | limite de RAM por job — confina OOM ao container (VPS sem swap) |
+| `forgejo_runner_toolcache_dir` | `/home/deploy/forgejo-runner/toolcache` | toolcache persistente (Node do `setup-node` reusado entre runs) |
 | `forgejo_runner_labels` | `ubuntu-latest:.../act-22.04,...` | mapeia `runs-on` → imagem de job |
 | `forgejo_runner_instance_url` | `https://git.aerobi.com.br` | URL pública (cache/artifact corretos) |
+
+### Performance
+
+- **Toolcache persistente**: a imagem de job (`catthehacker/ubuntu:act-22.04`) traz Node 24 no PATH mas com `/opt/hostedtoolcache` **vazio**; os apps pedem Node 22 (`.nvmrc`), então o `setup-node` baixava o Node 22 a cada run (~5 min). Montando um diretório do host em `/opt/hostedtoolcache`, o download vira custo único — runs seguintes reusam.
+- **Capacity 2**: dois jobs em paralelo (ex: `aerobi` e `aerobi-api` não ficam mais em fila). Cada job limitado a `forgejo_runner_job_memory`.
+- CI self-hosted é mais lento que a frota do GitHub na **primeira** run (imagem/Node/npm/build frios). As seguintes aquecem os caches (toolcache, cache npm via cache server embutido, cache do Next).
 
 ## Como aplicar
 
