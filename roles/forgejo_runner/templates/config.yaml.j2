@@ -19,8 +19,13 @@ cache:
   enabled: true
 
 container:
-  # Job containers entram na warpgate (alcançam postgres/valkey/apps).
-  network: "{{ docker_network_name }}"
+  # SEM rede fixa: cada job/serviço roda numa rede isolada criada pelo runner.
+  # NÃO usar a warpgate aqui — um service `postgres` de teste colidiria por
+  # nome com o postgres de PRODUÇÃO na warpgate (o job bateria no DB de prod).
+  # O deploy (futuro) não precisa do job na warpgate: roda `docker compose`
+  # via o sock do host e os containers deployados entram na warpgate pelo
+  # próprio compose (networks.external). Isolamento por job é o correto p/ CI.
+  network: ""
   privileged: false
   # Injeta o socket do host em cada job → steps podem rodar docker build/compose.
   options: "-v /var/run/docker.sock:/var/run/docker.sock"

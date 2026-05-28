@@ -6,7 +6,7 @@ Sobe o [Forgejo Actions Runner](https://forgejo.org/docs/latest/admin/actions/) 
 
 - Container `code.forgejo.org/forgejo/runner` registra-se na instância (`git.aerobi.com.br`) e fica em polling por jobs.
 - Cada job roda como um **container no Docker do HOST** (socket montado). A imagem do job vem das labels (`catthehacker/ubuntu:act-22.04` para `ubuntu-latest`).
-- Os job containers entram na rede **warpgate** e recebem o **docker.sock** — então os steps fazem `docker build`, sobem service containers (ex: postgres de teste) e fazem **deploy direto** (`docker compose up`) sem SSH.
+- Cada job + seus service containers rodam numa **rede isolada** criada pelo runner (NÃO a warpgate). Isso evita que um service de teste (ex: `postgres`) colida por nome com o postgres de **produção** na warpgate. Os steps recebem o **docker.sock** → fazem `docker build`, sobem service containers de teste e (no futuro) `docker compose up` para deploy — e os containers deployados entram na warpgate via o próprio `compose` (`networks.external`), sem o job precisar estar nela.
 
 ## Por que docker.sock do host (e não DinD)
 
