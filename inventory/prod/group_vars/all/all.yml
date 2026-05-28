@@ -122,11 +122,6 @@ postgres_apps:
     user: headscale_user
     password: "{{ vault_headscale_db_password }}"
 
-  - name: forgejo
-    db: forgejo
-    user: forgejo_user
-    password: "{{ vault_forgejo_db_password }}"
-
 # ------------------------------------------------------------
 # Vaultwarden — cofre de senhas da equipe
 # ------------------------------------------------------------
@@ -274,38 +269,6 @@ uptime_kuma_domain: "status.aerobi.com.br"
 #
 sftpgo_domain: "sftp.aerobi.com.br"
 sftpgo_admin_password: "{{ vault_sftpgo_admin_password }}"
-
-# ------------------------------------------------------------
-# Forgejo — Git forge self-hosted + Actions (issue #96/#100)
-# ------------------------------------------------------------
-# Decisão arquitetural: docs/research/forgejo.md
-# Reusa postgres (banco dedicado em postgres_apps) + valkey (cache, db 3).
-# Sessão no Postgres (NÃO no Valkey — evita eviction allkeys-lru).
-#
-# DNS no Registro.br (criar antes de expor com setup_app.yml):
-#   git.aerobi.com.br → A → 187.127.6.20 (público, com TLS)
-#
-# Vault — adicione antes de aplicar:
-#   echo -n "$(openssl rand -hex 32)" | \
-#     ansible-vault encrypt_string --stdin-name 'vault_forgejo_db_password' \
-#     --vault-id default@~/.ansible-vault/aerobi-prod \
-#     >> inventory/prod/group_vars/all/vault.yml
-#   # admin (use base64 p/ senha digitável):
-#   echo -n "$(openssl rand -base64 24)" | \
-#     ansible-vault encrypt_string --stdin-name 'vault_forgejo_admin_password' \
-#     --vault-id default@~/.ansible-vault/aerobi-prod \
-#     >> inventory/prod/group_vars/all/vault.yml
-#
-# Sequência:
-#   ansible-playbook -i inventory/prod playbooks/setup_forgejo.yml
-#   ansible-playbook playbooks/setup_app.yml \
-#     -e "app_name=forgejo app_domain=git.aerobi.com.br app_port=3020 \
-#         vhost_websocket_enabled=true vhost_client_max_body_size=1g"
-#
-forgejo_domain: "git.aerobi.com.br"
-forgejo_db_password: "{{ vault_forgejo_db_password }}"
-forgejo_admin_password: "{{ vault_forgejo_admin_password }}"
-# valkey_password (cache) já definido no bloco Valkey acima.
 
 # ------------------------------------------------------------
 # Ambiente
