@@ -1,0 +1,53 @@
+---
+# Defaults: forgejo_runner
+#
+# Forgejo Actions Runner — motor de CI que executa os workflows do Forgejo.
+# Registra-se na instância (git.aerobi.com.br) e roda os jobs como containers
+# no Docker do HOST (socket montado) — assim build, service containers de
+# teste e deploy na rede warpgate funcionam sem SSH.
+#
+# Decisão (issue #100, docs/research/forgejo.md): acesso via docker.sock do
+# host. Aceitável porque controlamos todo o código (sem PRs de terceiros).
+
+# ------------------------------------------------------------
+# Imagem e versão
+# ------------------------------------------------------------
+# Pin verificado com `docker manifest inspect`. A tag da imagem acompanha a
+# release (12.x). Bump: revisar https://code.forgejo.org/forgejo/runner/releases
+forgejo_runner_image: code.forgejo.org/forgejo/runner
+forgejo_runner_version: "12.10.2"
+forgejo_runner_container_name: forgejo-runner
+
+# ------------------------------------------------------------
+# Registro
+# ------------------------------------------------------------
+# Nome exibido em Site Admin -> Actions -> Runners.
+forgejo_runner_name: vps-runner
+# URL pública da instância (URLs de cache/artifact corretas; a VPS alcança o
+# próprio IP via nginx). O token de registro é EFÊMERO e gerado em apply-time
+# (forgejo actions generate-runner-token) — não vai pro vault.
+forgejo_runner_instance_url: "https://git.aerobi.com.br"
+forgejo_container_name: forgejo
+
+# Labels: mapeiam o runs-on dos workflows para imagens de job com tooling.
+# catthehacker/ubuntu:act-* é o de-facto "ubuntu-latest" do act/Forgejo Actions.
+forgejo_runner_labels: "ubuntu-latest:docker://catthehacker/ubuntu:act-22.04,ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04"
+
+# ------------------------------------------------------------
+# Concorrência e rede
+# ------------------------------------------------------------
+# 1 job por vez no início — protege a VPS de produção (risco principal do
+# research: build pesado competindo com o postgres). Subir quando houver folga.
+forgejo_runner_capacity: 1
+# Job containers entram na warpgate (alcançam postgres/valkey/apps p/ teste e deploy).
+docker_network_name: warpgate
+
+# ------------------------------------------------------------
+# Storage (host)
+# ------------------------------------------------------------
+# Guarda .runner (credencial do runner) + config + cache. WORKDIR do container
+# é /data. Container roda como root (precisa do docker.sock) — arquivos saem
+# root-owned (state interno do runner, não vai pra backup).
+forgejo_runner_data_dir: "/home/{{ deploy_user }}/forgejo-runner/data"
+
+forgejo_runner_log_level: info
