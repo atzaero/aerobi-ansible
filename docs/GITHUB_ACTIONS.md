@@ -1,13 +1,5 @@
 # Deploy via GitHub Actions
 
-> **⚠️ Em migração para Forgejo Actions (issues #96/#100).** O Git + CI estão sendo
-> auto-hospedados no Forgejo (`git.aerobi.com.br`). O **runner** já roda na VPS
-> (role `forgejo_runner`, jobs no Docker do host). Próximo passo: portar os
-> workflows `ci.yml`/`release.yml` (registry GHCR → registry do Forgejo, plugin
-> Forgejo do `semantic-release`, deploy local em vez de SSH). O fluxo abaixo
-> (SSH a partir do GitHub Actions) descreve o estado **legado**, mantido até o
-> cutover de cada repo. Decisão: [`docs/research/forgejo.md`](research/forgejo.md).
-
 ## Como funciona
 
 O GitHub Actions faz SSH no VPS como usuário `deploy` e executa os

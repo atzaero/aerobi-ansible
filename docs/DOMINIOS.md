@@ -7,7 +7,7 @@ Padrão para nomear endpoints públicos da VPS aerobi. Diferente de projetos com
 | Categoria | Subdomínio começa com | Exemplos |
 |---|---|---|
 | **Produto** (apps de negócio) | `api.`, `app.`, `admin.` | `api.aerobi.com.br`, `app.aerobi.com.br` |
-| **Infra compartilhada** | `vault.`, `s3.`, `headscale.`, `status.`, `git.` | `vault.aerobi.com.br`, `s3.aerobi.com.br`, `git.aerobi.com.br` |
+| **Infra compartilhada** | `vault.`, `s3.`, `headscale.`, `status.` | `vault.aerobi.com.br`, `s3.aerobi.com.br`, `headscale.aerobi.com.br` |
 | **Infra admin-only (tailnet)** | `s3-console.`, `status.`, `sftp.` | acessível só via `tailscale up` |
 
 ## Por que separar (mesmo no domínio único)
@@ -30,7 +30,6 @@ Subdomínios em `aerobi.com.br` apontando para `187.127.6.20`:
 | `s3-console.aerobi.com.br` | infra admin | MinIO Console | 9001 | **tailnet-only** | `setup_minio.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`) |
 | `status.aerobi.com.br` | infra admin | Uptime Kuma | 3001 | **tailnet-only** | `setup_uptime_kuma.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`) |
 | `sftp.aerobi.com.br` | infra admin | SFTP Go (web UI) | 8083 | **tailnet-only** | `setup_sftpgo.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true vhost_client_max_body_size=5g`) |
-| `git.aerobi.com.br` | infra | Forgejo | 3020 | público (git clients + CI precisam alcançar) | `setup_forgejo.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_client_max_body_size=1g`) |
 
 DNS criado no Registro.br. Procedimento detalhado em [`REGISTRO_BR.md`](REGISTRO_BR.md).
 
