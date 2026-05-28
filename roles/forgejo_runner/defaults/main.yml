@@ -39,7 +39,9 @@ forgejo_runner_labels: "ubuntu-latest:docker://catthehacker/ubuntu:act-22.04,ubu
 # 1 job por vez no início — protege a VPS de produção (risco principal do
 # research: build pesado competindo com o postgres). Subir quando houver folga.
 forgejo_runner_capacity: 1
-# Job containers entram na warpgate (alcançam postgres/valkey/apps p/ teste e deploy).
+# Jobs rodam em rede ISOLADA por job (config.yaml: container.network vazio) —
+# NÃO a warpgate, para um service de teste não colidir com o postgres de prod.
+# docker_network_name fica como referência (não usado no network dos jobs).
 docker_network_name: warpgate
 
 # ------------------------------------------------------------
