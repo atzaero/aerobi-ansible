@@ -42,6 +42,17 @@
     group: "{{ deploy_user }}"
     mode: "0750"
 
+- name: Garantir diretório de toolcache persistente dos jobs
+  # Montado em /opt/hostedtoolcache nos containers de job: o Node baixado pelo
+  # setup-node persiste entre runs (a imagem traz toolcache vazio). Container de
+  # job roda como root e escreve aqui.
+  file:
+    path: "{{ forgejo_runner_toolcache_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
 - name: Renderizar config.yaml do runner
   template:
     src: config.yaml.j2
