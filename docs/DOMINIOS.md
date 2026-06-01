@@ -24,6 +24,8 @@ Subdomínios em `aerobi.com.br` apontando para `187.127.6.20`:
 |---|---|---|---|---|---|
 | `aerobi.com.br` + `www` | produto | `aerobi-web` | 3000 | público | `setup_app.yml` (`vhost_client_max_body_size=12m`, `vhost_server_aliases=['www.aerobi.com.br']`) |
 | `api.aerobi.com.br` | produto | `aerobi-api` | 3333 | público | `setup_app.yml` |
+| `staging.aerobi.com.br` | produto (staging) | `aerobi-web-staging` | 3100 | público | `setup_staging.yml` |
+| `api.staging.aerobi.com.br` | produto (staging) | `aerobi-api-staging` | 3433 | público | `setup_staging.yml` |
 | `vault.aerobi.com.br` | infra | Vaultwarden | 3010 | público (`/admin` tailnet-only) | `setup_vaultwarden.yml` |
 | `headscale.aerobi.com.br` | infra | Headscale | 8080 | público (necessário para clients off-tailnet logarem) | `setup_headscale.yml` |
 | `s3.aerobi.com.br` | infra | MinIO API | 9000 | público | `setup_minio.yml` + `setup_app.yml` (`vhost_client_max_body_size=25m`) |

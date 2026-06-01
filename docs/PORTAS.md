@@ -18,12 +18,21 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 
 ## Portas internas (não expostas)
 
+> **Portas das apps de produto** (`aerobi-web`, `aerobi-api`, e suas variantes
+> de staging) têm fonte da verdade em
+> [`inventory/prod/group_vars/all/ports.yml`](../inventory/prod/group_vars/all/ports.yml)
+> (`app_ports`). Os repos `atzaero/aerobi` e `atzaero/aerobi-api` consomem esse
+> arquivo. A tabela abaixo é espelho documental — ao mudar uma porta de produto,
+> edite o `ports.yml` primeiro. Convenção: **staging = porta de prod + 100**.
+
 | Porta | Serviço | Bind | Acesso |
 |---|---|---|---|
 | 3000 | aerobi-web | `127.0.0.1` | Apenas via Nginx em `aerobi.com.br` + `www` (Next.js, frontend AEROMAP-BI; cert SAN apex+www via `vhost_server_aliases`) |
 | 3001 | Uptime Kuma | `127.0.0.1` | Apenas via Nginx em `status.aerobi.com.br` (tailnet-only) |
 | 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` (`/admin` tailnet-only) |
+| 3100 | aerobi-web-staging | `127.0.0.1` | Apenas via Nginx em `staging.aerobi.com.br` (frontend de staging; `setup_staging.yml`) |
 | 3333 | aerobi-api | `127.0.0.1` | Apenas via Nginx em `api.aerobi.com.br` |
+| 3433 | aerobi-api-staging | `127.0.0.1` | Apenas via Nginx em `api.staging.aerobi.com.br` (API de staging; `setup_staging.yml`) |
 | 5432 | PostgreSQL 17 | `127.0.0.1` (apps) + `100.64.0.1` (tailnet via socat sidecar) | Apps via rede docker `warpgate`; admin via DBeaver direto em `100.64.0.1:5432` (sem SSH tunnel — issue #7 fechada via `roles/postgres_tailnet_proxy/`) |
 | 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |
 | 8080 | Headscale | `127.0.0.1` | Apenas via Nginx em `headscale.aerobi.com.br` |

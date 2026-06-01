@@ -15,6 +15,8 @@ Subdomínios em uso ou previstos:
 | `@` (apex) | A | `187.127.6.20` | 3600 | `aerobi-web` | cutover concluído (era `35.219.200.207`/Firebase) |
 | `www` | A | `187.127.6.20` | 3600 | `aerobi-web` | cutover concluído (era `35.219.200.207`/Firebase) |
 | `api` | A | `187.127.6.20` | 3600 | `aerobi-api` | `setup_app.yml` |
+| `staging` | A | `187.127.6.20` | 3600 | `aerobi-web-staging` | `setup_staging.yml` |
+| `api.staging` | A | `187.127.6.20` | 3600 | `aerobi-api-staging` | `setup_staging.yml` |
 | `vault` | A | `187.127.6.20` | 3600 | Vaultwarden | `setup_vaultwarden.yml` |
 | `headscale` | A | `187.127.6.20` | 3600 | Headscale | `setup_headscale.yml` |
 | `s3` | A | `187.127.6.20` | 3600 | MinIO API | `setup_minio.yml` + `setup_app.yml` |

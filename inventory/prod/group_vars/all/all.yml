@@ -112,6 +112,14 @@ postgres_apps:
     user: aerobi_user
     password: "{{ vault_aerobi_db_password }}"
 
+  # STAGING — banco isolado para a API de staging (api.staging.aerobi.com.br).
+  # Mesmo cluster PostgreSQL, banco/usuário/senha próprios. NUNCA reutiliza o
+  # banco de produção. O frontend de staging usa Firebase (sem Postgres).
+  - name: aerobi_staging
+    db: aerobi_staging
+    user: aerobi_staging_user
+    password: "{{ vault_aerobi_staging_db_password }}"
+
   - name: vaultwarden
     db: vaultwarden
     user: vaultwarden_user
@@ -269,6 +277,21 @@ uptime_kuma_domain: "status.aerobi.com.br"
 #
 sftpgo_domain: "sftp.aerobi.com.br"
 sftpgo_admin_password: "{{ vault_sftpgo_admin_password }}"
+
+# ------------------------------------------------------------
+# Staging — ambiente de homologação co-localizado na MESMA VPS
+# ------------------------------------------------------------
+# Roda lado a lado com produção: mesmo host, mesmo cluster PostgreSQL,
+# portas e banco separados. Portas em ports.yml (app_ports.staging),
+# banco em postgres_apps (aerobi_staging). Provisionar com:
+#   ansible-playbook playbooks/setup_app_databases.yml   # cria banco
+#   ansible-playbook playbooks/setup_staging.yml         # vhosts + SSL
+#
+# DNS no Registro.br (já criados → 187.127.6.20, públicos):
+#   staging.aerobi.com.br      → frontend (porta {{ app_ports.staging['aerobi-web'] }})
+#   api.staging.aerobi.com.br  → API      (porta {{ app_ports.staging['aerobi-api'] }})
+aerobi_web_staging_domain: "staging.aerobi.com.br"
+aerobi_api_staging_domain: "api.staging.aerobi.com.br"
 
 # ------------------------------------------------------------
 # Ambiente
