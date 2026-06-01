@@ -1,0 +1,85 @@
+---
+# Playbook: setup_staging.yml
+#
+# Descrição: provisiona o ambiente de STAGING co-localizado na MESMA VPS de
+# produção. Cria os virtual hosts Nginx + certificados SSL (Certbot) para o
+# frontend e a API de staging, reaproveitando a role `nginx_vhost` (mesma
+# role/template de produção — zero duplicação).
+#
+# As portas vêm da FONTE DA VERDADE (inventory/prod/group_vars/all/ports.yml,
+# `app_ports.staging`) — nunca digitadas à mão. Os domínios vêm de all.yml.
+#
+# Deve ser executado APÓS setup_vps.yml (Nginx instalado) e, para a API,
+# APÓS setup_app_databases.yml (banco `aerobi_staging` criado).
+#
+# NÃO toca o provisionamento de produção: produção continua sendo feita via
+# setup_app.yml com -e (ver docs/DEPLOY_APP.md).
+#
+# Uso:
+#   ansible-playbook playbooks/setup_staging.yml
+#
+# Pré-requisitos (ver CLAUDE.md regra 7):
+#   - DNS propagado: staging.aerobi.com.br e api.staging.aerobi.com.br → VPS
+#   - Banco de staging criado: ansible-playbook playbooks/setup_app_databases.yml
+#   - SSH para deploy@187.127.6.20 funcional
+
+- name: Provisionar ambiente de STAGING (vhosts + SSL)
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar que o mapa de portas (app_ports) está carregado
+      fail:
+        msg: >
+          app_ports.staging não encontrado. Confirme que
+          inventory/prod/group_vars/all/ports.yml existe e está no inventário.
+      when: app_ports.staging is not defined
+
+    - name: Exibir configuração de staging que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  STAGING (co-localizado em vps-prod)"
+          - "============================================"
+          - "  web : {{ aerobi_web_staging_domain }} -> 127.0.0.1:{{ app_ports.staging['aerobi-web'] }}"
+          - "  api : {{ aerobi_api_staging_domain }} -> 127.0.0.1:{{ app_ports.staging['aerobi-api'] }}"
+          - "============================================"
+
+  tasks:
+    # Frontend de staging — público. client_max_body_size=12m em paridade com
+    # o aerobi-web de produção (upload de documentos do Next, default 1m = 413).
+    - name: Vhost + SSL — frontend de staging
+      include_role:
+        name: nginx_vhost
+      vars:
+        vhost_app_name: aerobi-web-staging
+        vhost_domain: "{{ aerobi_web_staging_domain }}"
+        vhost_port: "{{ app_ports.staging['aerobi-web'] }}"
+        vhost_client_max_body_size: "12m"
+
+    # API de staging — pública, mesmas opções do aerobi-api de produção.
+    - name: Vhost + SSL — API de staging
+      include_role:
+        name: nginx_vhost
+      vars:
+        vhost_app_name: aerobi-api-staging
+        vhost_domain: "{{ aerobi_api_staging_domain }}"
+        vhost_port: "{{ app_ports.staging['aerobi-api'] }}"
+
+  post_tasks:
+    - name: Exibir resumo
+      debug:
+        msg:
+          - "============================================"
+          - "  Staging provisionado com sucesso!"
+          - "============================================"
+          - "  Frontend : https://{{ aerobi_web_staging_domain }}  (porta {{ app_ports.staging['aerobi-web'] }})"
+          - "  API      : https://{{ aerobi_api_staging_domain }}  (porta {{ app_ports.staging['aerobi-api'] }})"
+          - "  Diretórios: /home/{{ deploy_user }}/apps/aerobi-web-staging"
+          - "             /home/{{ deploy_user }}/apps/aerobi-api-staging"
+          - "  Banco API : aerobi_staging (user aerobi_staging_user)"
+          - "============================================"
+          - "  Deploy dos containers: GitHub Actions dos repos"
+          - "  atzaero/aerobi e atzaero/aerobi-api (branch/env staging)."
+          - "  Bind 127.0.0.1:<porta> + rede docker warpgate."
+          - "============================================"

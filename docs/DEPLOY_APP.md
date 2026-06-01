@@ -27,6 +27,15 @@ O **GitHub Actions** (no repo da app) cuida do **deploy contínuo**, a cada push
 |---|---|---|---|---|
 | `aerobi-api` | `api.aerobi.com.br` | 3333 | `atzaero/aerobi-api` | produção |
 | `aerobi-web` | `aerobi.com.br` + `www` | 3000 | `atzaero/aerobi` | **migração** (Firebase → VPS; cutover de DNS pendente) |
+| `aerobi-api-staging` | `api.staging.aerobi.com.br` | 3433 | `atzaero/aerobi-api` | staging (co-localizado em vps-prod) |
+| `aerobi-web-staging` | `staging.aerobi.com.br` | 3100 | `atzaero/aerobi` | staging (co-localizado em vps-prod) |
+
+> **Portas:** a fonte da verdade é
+> [`inventory/prod/group_vars/all/ports.yml`](../inventory/prod/group_vars/all/ports.yml)
+> (`app_ports`). Convenção: **staging = porta de prod + 100**. O staging roda
+> na **mesma VPS**, mesmo cluster PostgreSQL (banco `aerobi_staging`), portas e
+> banco separados. Provisionamento dos vhosts de staging: `setup_staging.yml`
+> (não `setup_app.yml`). Ver seção "Staging" abaixo.
 
 Infra compartilhada (Vaultwarden, MinIO, Headscale, etc) está em [`DOMINIOS.md`](DOMINIOS.md)
 e [`PORTAS.md`](PORTAS.md).
@@ -162,6 +171,46 @@ Sequência de **2 passadas** (downtime funcional ~0; janela HTTP-only de minutos
 
 **Rollback:** reverter o A para o IP antigo no Registro.br (com TTL 60, volta em minutos). O
 container e o vhost na VPS ficam inertes sem DNS.
+
+---
+
+## Staging (homologação na mesma VPS)
+
+O ambiente de staging roda **co-localizado em `vps-prod`** — mesmo host, mesmo
+cluster PostgreSQL, mesmo inventário `inventory/prod`. O isolamento é por
+**porta** e por **banco**, não por máquina:
+
+| | prod | staging |
+|---|---|---|
+| frontend | `aerobi.com.br` → `127.0.0.1:3000` | `staging.aerobi.com.br` → `127.0.0.1:3100` |
+| API | `api.aerobi.com.br` → `127.0.0.1:3333` | `api.staging.aerobi.com.br` → `127.0.0.1:3433` |
+| banco da API | `aerobi` / `aerobi_user` | `aerobi_staging` / `aerobi_staging_user` |
+| diretórios | `apps/aerobi-web`, `apps/aerobi-api` | `apps/aerobi-web-staging`, `apps/aerobi-api-staging` |
+
+Portas na fonte da verdade
+[`ports.yml`](../inventory/prod/group_vars/all/ports.yml) (`app_ports.staging`),
+convenção **prod + 100**. O frontend de staging usa Firebase (sem Postgres),
+como o de produção — só a API tem banco.
+
+**Provisionar (uma vez, após DNS propagado e secret no vault):**
+
+```bash
+# 1. Banco da API de staging (idempotente; não mexe nos bancos de prod)
+ansible-playbook playbooks/setup_app_databases.yml
+
+# 2. Vhosts + SSL de staging (frontend + API numa tacada, lê portas do ports.yml)
+ansible-playbook playbooks/setup_staging.yml
+```
+
+`setup_staging.yml` reaproveita a role `nginx_vhost` (mesma role/template de
+produção). **Não altera** o provisionamento de produção (que continua via
+`setup_app.yml -e`).
+
+**Deploy dos containers de staging:** GitHub Actions dos repos `atzaero/aerobi`
+e `atzaero/aerobi-api` (branch/environment de staging), publicando imagem no
+GHCR e subindo container com bind `127.0.0.1:3100` / `127.0.0.1:3433` na rede
+`warpgate`. `REMOTE_TARGET` = `/home/deploy/apps/aerobi-web-staging` (e
+`aerobi-api-staging`).
 
 ---
 

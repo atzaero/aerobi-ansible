@@ -1,0 +1,37 @@
+---
+# ============================================================================
+# FONTE DA VERDADE DAS PORTAS DAS APLICAÇÕES DE PRODUTO
+# ============================================================================
+#
+# ⚠️  NÃO EDITE uma porta aqui sem ler este aviso.
+#
+# Este é o mapa canônico `ambiente -> aplicação -> porta interna` (bind sempre
+# em 127.0.0.1, exposição via nginx — ver CLAUDE.md regra 2). É carregado
+# automaticamente pelo Ansible (group_vars/all) e consumido por:
+#
+#   - playbooks/setup_staging.yml      (provisiona os vhosts de staging)
+#   - docs/PORTAS.md                   (tabela é espelho deste arquivo)
+#
+# E DEPENDIDO por OUTROS REPOSITÓRIOS — mudar uma porta aqui quebra o
+# docker-compose / CI desses projetos:
+#
+#   - atzaero/aerobi      (frontend web)
+#   - atzaero/aerobi-api  (backend API)
+#
+# Convenção de alocação:
+#   - Apps de produto vivem na faixa 3xxx.
+#   - prod:  aerobi-web=3000, aerobi-api=3333 (já em produção).
+#   - staging = porta de prod + 100  (regra estável e previsível).
+#   - Portas de infra (postgres, valkey, minio, headscale, sftpgo, ...) NÃO
+#     entram aqui — ficam em all.yml como `<servico>_port`. Mapa completo
+#     de TODAS as portas em uso: docs/PORTAS.md.
+#
+# Antes de alocar uma porta nova, confira docs/PORTAS.md para não colidir.
+# ============================================================================
+app_ports:
+  prod:
+    aerobi-web: 3000
+    aerobi-api: 3333
+  staging:
+    aerobi-web: 3100   # = 3000 (prod) + 100
+    aerobi-api: 3433   # = 3333 (prod) + 100
