@@ -29,3 +29,24 @@ mediamtx_paths:
 
 # Usuário de deploy padrão do lab (já configurado no Dockerfile do raspi-sim).
 deploy_user: deploy
+
+# ------------------------------------------------------------
+# Firewall (UFW) — edge do aeródromo (role: firewall)
+# ------------------------------------------------------------
+# Política deny-default no incoming; só estas portas/interfaces entram.
+# Threat model: streams de câmera (HLS mediamtx :8888) acessíveis SÓ via
+# tailnet, nunca pela LAN/internet. O HLS NÃO está na allowlist TCP de
+# propósito — chega apenas pela interface tailscale0 (liberada abaixo).
+#
+# SSH (22/tcp): mantido aberto para acesso administrativo via LAN — não
+# restringir por IP aqui para evitar lockout do Raspi.
+ufw_allowed_ports:
+  - 22
+
+# Tailscale/WireGuard usam 41641/udp para handshake P2P.
+ufw_allowed_udp_ports:
+  - 41641
+
+# Tráfego entre nós da tailnet é confiável; libera a interface tailscale0
+# inteira (é por aqui que o backend Aerobi consome o HLS das câmeras).
+ufw_allow_tailscale_interface: true

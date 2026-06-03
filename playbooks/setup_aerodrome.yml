@@ -27,6 +27,16 @@
       changed_when: false
 
   roles:
+    # Firewall deny-default ANTES dos serviços: garante que o HLS do mediamtx
+    # (porta {{ mediamtx_hls_port }}, bind em todas as interfaces) só fique
+    # acessível via tailnet, e não exposto na LAN/internet do aeródromo.
+    # Threat model: streams de câmera só via tailnet.
+    # As regras (SSH 22/tcp da LAN, Tailscale 41641/udp, interface tailscale0)
+    # vêm das vars ufw_* definidas no inventário do edge.
+    # No lab (raspi-sim em container) pule com --skip-tags firewall.
+    - role: firewall
+      tags: [firewall, security]
+
     - role: aerodrome_edge
       tags: [aerodrome_edge]
 

@@ -9,9 +9,9 @@ logDestinations: [stdout]
 rtsp: no
 
 # HLS exposto. Em produção: porta {{ mediamtx_hls_port }} acessível só pela tailnet
-# (firewall do host bloqueia internet pública).
+# (firewall do host — role: firewall — bloqueia LAN/internet e libera só tailscale0).
 hls: yes
-hlsAddress: ":{{ mediamtx_hls_port }}"
+hlsAddress: "{{ mediamtx_hls_address }}"
 hlsAlwaysRemux: yes
 hlsVariant: {{ mediamtx_hls_variant }}
 hlsSegmentCount: {{ mediamtx_hls_segment_count }}
