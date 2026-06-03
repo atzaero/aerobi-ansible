@@ -20,6 +20,24 @@
 #   - DNS: vaultwarden_domain apontando para o IP da VPS
 
 # ----------------------------------------------------------------
+# Validação de credenciais (fail-fast)
+# ----------------------------------------------------------------
+
+- name: Validar admin token do Vaultwarden
+  fail:
+    msg: >
+      vault_vaultwarden_admin_token vazio ou 'changeme'.
+      Configure no vault antes de aplicar.
+  when: vault_vaultwarden_admin_token | default('') in ['changeme', '', None]
+
+- name: Validar credenciais do banco Vaultwarden
+  fail:
+    msg: >
+      vaultwarden_db_password vazio ou 'changeme'
+      (verifique vault_vaultwarden_db_password no vault). Configure antes de aplicar.
+  when: vaultwarden_db_password | default('') in ['changeme', '', None]
+
+# ----------------------------------------------------------------
 # Container
 # ----------------------------------------------------------------
 
@@ -29,6 +47,7 @@
     state: present
 
 - name: Definir env base do Vaultwarden
+  no_log: true
   set_fact:
     _vaultwarden_env:
       DOMAIN: "https://{{ vaultwarden_domain }}"
@@ -47,6 +66,7 @@
       TZ: "America/Sao_Paulo"
 
 - name: Adicionar variáveis SMTP (apenas se configurado)
+  no_log: true
   set_fact:
     _vaultwarden_env: "{{ _vaultwarden_env | combine({
       'SMTP_HOST': vaultwarden_smtp_host,
@@ -59,6 +79,7 @@
   when: vaultwarden_smtp_host != ''
 
 - name: Subir container Vaultwarden {{ vaultwarden_version }}
+  no_log: true
   community.docker.docker_container:
     name: "{{ vaultwarden_container_name }}"
     image: "{{ vaultwarden_image }}:{{ vaultwarden_version }}"

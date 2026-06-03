@@ -22,6 +22,7 @@
     mode: "0755"
 
 - name: Subir container MinIO {{ minio_version }}
+  no_log: true
   community.docker.docker_container:
     name: "{{ minio_container_name }}"
     image: "{{ minio_image }}:{{ minio_version }}"
