@@ -1,0 +1,11 @@
+---
+description: Contexto canônico do aerobi-ansible
+alwaysApply: true
+---
+
+@AGENTS.md
+
+O contexto canônico do repo (produto, stack, alvos SSH, regras estritas, segurança,
+gitflow, gotchas, MCPs, tooling) vive em `AGENTS.md`. Para revisão de
+infra/segurança, ver também `docs/SECURITY.md` e o agente
+`.claude/agents/infra-reviewer.md`.
