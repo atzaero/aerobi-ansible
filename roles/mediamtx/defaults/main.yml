@@ -9,6 +9,15 @@ mediamtx_version: v1.18.1
 # Portas
 mediamtx_hls_port: 8888
 
+# Endereço de bind do HLS. Default ":porta" = todas as interfaces.
+# A proteção de borda é feita pelo firewall (UFW deny-default + libera só
+# tailscale0), então o HLS só é alcançável via tailnet mesmo com bind em
+# todas as interfaces. Para defesa em profundidade, sobrescreva por host
+# com o IP do tailscale0 do aeródromo, ex (host_vars):
+#   mediamtx_hls_address: "100.x.y.z:{{ mediamtx_hls_port }}"
+# (NÃO usar no lab/CI — o IP do tailnet só existe no Raspi real.)
+mediamtx_hls_address: ":{{ mediamtx_hls_port }}"
+
 # Lista de paths que mediamtx deve servir.
 # Cada item: { name: <stream-name>, source: <url-rtsp> }
 # Exemplo:
@@ -31,6 +40,12 @@ mediamtx_source_on_demand_close_after: 10s
 mediamtx_hls_segment_count: 7
 mediamtx_hls_segment_duration: 1s
 mediamtx_hls_variant: fmp4
+# CORS allowlist do HLS.
+# TODO(security): restringir para a origem real do backend Aerobi quando
+# definida (ex: ["https://app.aerobi.com.br"]). Hoje fica "*" porque o
+# consumo é server-side via tailnet (sem header Origin) e a origem do
+# backend não está parametrizada no repo. O controle de acesso efetivo é
+# feito pelo firewall (deny-default + só tailscale0), não pelo CORS.
 mediamtx_hls_allow_origins:
   - "*"
 
