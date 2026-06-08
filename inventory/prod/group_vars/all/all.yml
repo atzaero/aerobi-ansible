@@ -193,7 +193,7 @@ vaultwarden_smtp_username: "admin@aerobi.com.br"
 #     --user aerobi --reusable --ephemeral --expiration 90d --tags tag:ci
 # Cadastrar a key como secret nos repos de app (aerobi-api, aerobi-web):
 #   gh secret set HEADSCALE_AUTHKEY --repo atzaero/aerobi-api   --body '<key>'
-#   gh secret set HEADSCALE_AUTHKEY --repo atzaero/aerobi-web   --body '<key>'
+#   gh secret set HEADSCALE_AUTHKEY --repo atzaero/aerobi       --body '<key>'
 # (Não precisa ir no vault deste repo — é consumida só pelos workflows de app.)
 # É secret de CONEXÃO (como SSH_PRIVATE_KEY/REMOTE_*): repo-level, NÃO por
 # GitHub Environment — staging e prod usam a MESMA VPS/tailnet, mesma key.
