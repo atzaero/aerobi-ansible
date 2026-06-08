@@ -236,8 +236,12 @@ minio_buckets:
     public_read: false
   - name: aerobi-prod-backups
     public_read: false
-  # bucket aviascan: imagens de matrículas de aeronaves (ref: aerobi-api#180)
-  - name: aerobi-prod-aviascan
+  # imagens de leitura de matrículas de aeronaves (aircraft_reading) — ref: aerobi-api#180
+  - name: aerobi-prod-readings
+    public_read: false
+  # staging compartilha esta mesma instância MinIO (co-localizado na VPS de prod);
+  # primeiro ambiente a consumir as leituras (deploy via epic/ → develop).
+  - name: aerobi-staging-readings
     public_read: false
 
 # ------------------------------------------------------------

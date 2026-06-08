@@ -115,8 +115,8 @@ minio_container_gid: 1001
 minio_buckets:
   - name: aerobi-dev-uploads
     public_read: false
-  # bucket aviascan: imagens de matrículas de aeronaves (ref: aerobi-api#180)
-  - name: aerobi-dev-aviascan
+  # imagens de leitura de matrículas de aeronaves (aircraft_reading) — ref: aerobi-api#180
+  - name: aerobi-dev-readings
     public_read: false
 
 # ------------------------------------------------------------
