@@ -66,6 +66,10 @@ ufw_allow_tailscale_interface: true
 fail2ban_bantime: 3600         # 1 hora de ban
 fail2ban_maxretry: 3           # apenas 3 tentativas
 fail2ban_findtime: 600
+# Allowlist (ignoreip) vem de roles/fail2ban/defaults/main.yml e já cobre
+# loopback + tailnet (100.64.0.0/10). O deploy do CI conecta via tailnet
+# (issue #129), então nunca toca a porta 22 pública nem é banido. Sobrescreva
+# fail2ban_ignoreip aqui apenas se precisar liberar uma rede adicional.
 
 # ------------------------------------------------------------
 # Diretórios
@@ -181,6 +185,20 @@ vaultwarden_smtp_username: "admin@aerobi.com.br"
 #   docker exec headscale headscale preauthkeys create \
 #     --user aerobi --reusable --expiration 90d --tags tag:vps
 # Salvar no vault como vault_headscale_authkey_vps e re-aplicar.
+#
+# Pre-auth key do CI/CD (issue #129 — deploy via tailnet, NÃO toca a 22 pública):
+# o runner do GitHub Actions entra na tailnet como nó EFÊMERO (auto-removido em
+# 30 min de inatividade) com a tag tag:ci, que a ACL libera só pra SSH na VPS.
+#   docker exec headscale headscale preauthkeys create \
+#     --user aerobi --reusable --ephemeral --expiration 90d --tags tag:ci
+# Cadastrar a key como secret nos repos de app (aerobi-api, aerobi-web):
+#   gh secret set HEADSCALE_AUTHKEY --repo atzaero/aerobi-api   --body '<key>'
+#   gh secret set HEADSCALE_AUTHKEY --repo atzaero/aerobi-web   --body '<key>'
+# (Não precisa ir no vault deste repo — é consumida só pelos workflows de app.)
+# É secret de CONEXÃO (como SSH_PRIVATE_KEY/REMOTE_*): repo-level, NÃO por
+# GitHub Environment — staging e prod usam a MESMA VPS/tailnet, mesma key.
+# ATENÇÃO: expira em 90d → antes do vencimento, gerar nova key e re-cadastrar o
+# secret nos repos de app, senão o registro do nó efêmero (e o deploy) falha.
 #
 headscale_domain: "headscale.aerobi.com.br"
 headscale_user_name: aerobi

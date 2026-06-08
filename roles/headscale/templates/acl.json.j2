@@ -2,9 +2,11 @@
   "tagOwners": {
     "tag:vps": ["{{ headscale_user_name }}@"],
     "tag:airfield": ["{{ headscale_user_name }}@"],
-    "tag:dev": ["{{ headscale_user_name }}@"]
+    "tag:dev": ["{{ headscale_user_name }}@"],
+    "tag:ci": ["{{ headscale_user_name }}@"]
   },
   "acls": [
+    // Workstations de dev — acesso amplo intencional (admin da tailnet).
     {
       "action": "accept",
       "src": ["tag:dev"],
@@ -14,6 +16,12 @@
       "action": "accept",
       "src": ["tag:vps"],
       "dst": ["tag:airfield:*"]
+    },
+    // Runner do CI (nó efêmero) — só SSH (22) na VPS para deploy (issue #129).
+    {
+      "action": "accept",
+      "src": ["tag:ci"],
+      "dst": ["tag:vps:22"]
     }
   ]
 }

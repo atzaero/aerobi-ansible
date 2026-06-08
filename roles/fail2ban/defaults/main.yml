@@ -1,0 +1,23 @@
+---
+# Defaults: fail2ban
+#
+# Protege o SSH contra força bruta. Os valores de prod (mais restritivos)
+# são sobrescritos em inventory/prod/group_vars/all/all.yml.
+
+# Janela e severidade do ban (sobrescritos em prod).
+fail2ban_bantime: 600          # 10 min
+fail2ban_findtime: 600         # janela de contagem de falhas
+fail2ban_maxretry: 5           # tentativas antes do ban
+
+# Allowlist — IPs/redes que o fail2ban NUNCA bane.
+#
+# Inclui SEMPRE a tailnet (100.64.0.0/10, range CGNAT do Tailscale/Headscale):
+# o deploy do CI conecta via tailnet (issue #129), então o SSH de deploy jamais
+# pode ser banido. Sem isso, um runner que entra pela tailscale0 e tropeça em
+# qualquer falha de auth seria descartado com DROP → 'Connection timed out'.
+#
+# Loopback coberto para não auto-banir serviços locais.
+fail2ban_ignoreip:
+  - 127.0.0.0/8
+  - ::1
+  - 100.64.0.0/10

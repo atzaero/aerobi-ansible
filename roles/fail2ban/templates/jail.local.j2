@@ -3,6 +3,8 @@
 # Para modificar, edite o template em roles/fail2ban/templates/jail.local.j2
 
 [DEFAULT]
+# Allowlist: redes nunca banidas (loopback + tailnet do deploy CI — issue #129).
+ignoreip = {{ fail2ban_ignoreip | join(' ') }}
 bantime  = {{ fail2ban_bantime }}
 findtime = {{ fail2ban_findtime }}
 maxretry = {{ fail2ban_maxretry }}
