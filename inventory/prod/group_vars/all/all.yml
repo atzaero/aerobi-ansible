@@ -236,6 +236,7 @@ minio_buckets:
     public_read: false
   - name: aerobi-prod-backups
     public_read: false
+  # bucket aviascan: imagens de matrículas de aeronaves (ref: aerobi-api#180)
   - name: aerobi-prod-aviascan
     public_read: false
 
