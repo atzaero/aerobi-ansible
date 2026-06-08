@@ -236,6 +236,8 @@ minio_buckets:
     public_read: false
   - name: aerobi-prod-backups
     public_read: false
+  - name: aerobi-prod-aviascan
+    public_read: false
 
 # ------------------------------------------------------------
 # Uptime Kuma — status + monitoring + domain expiry alerts
