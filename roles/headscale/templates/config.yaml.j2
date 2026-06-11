@@ -11,15 +11,25 @@ prefixes:
   v6: fd7a:115c:a1e0::/48
   allocation: sequential
 
-# DERP — relays para NAT traversal. Usando relays públicos do Tailscale
-# (ver doc/research/private-network.md sobre suporte oficial).
+# DERP — relays para NAT traversal. DERP embarcado do próprio Headscale
+# (aerobi-ansible#135): os relays PÚBLICOS da Tailscale são instáveis/não
+# suportados p/ Headscale e o peering CI runner↔VPS não fechava (SSH timeout no
+# deploy). O DERP embarcado serve o HTTPS pelo server_url (porta 443 já exposta)
+# e o STUN em UDP 3478 (liberar no firewall). `automatically_add_embedded_derp_region`
+# injeta a região própria no DERP map; `urls: []` remove os relays públicos.
 derp:
   server:
-    enabled: false
-  urls:
-    - https://controlplane.tailscale.com/derpmap/default
+    enabled: true
+    region_id: {{ headscale_derp_region_id | default(999) }}
+    region_code: "{{ headscale_derp_region_code | default('aerobi') }}"
+    region_name: "{{ headscale_derp_region_name | default('Aerobi Embedded DERP') }}"
+    stun_listen_addr: "0.0.0.0:{{ headscale_derp_stun_port | default(3478) }}"
+    private_key_path: /var/lib/headscale/derp_server_private.key
+    automatically_add_embedded_derp_region: true
+    ipv4: "{{ headscale_derp_ipv4 | default(ansible_default_ipv4.address | default('')) }}"
+  urls: []
   paths: []
-  auto_update_enabled: true
+  auto_update_enabled: false
   update_frequency: 24h
 
 disable_check_updates: true
