@@ -51,9 +51,11 @@ ufw_allowed_ports:
   - 80
   - 443
 
-# Portas UDP — Tailscale/WireGuard usam 41641 para handshake P2P
+# Portas UDP — Tailscale/WireGuard usam 41641 para handshake P2P;
+# 3478 é o STUN do DERP embarcado do Headscale (aerobi-ansible#135).
 ufw_allowed_udp_ports:
   - 41641
+  - 3478
 
 # Tráfego entre nós da tailnet é confiável (ACLs aplicadas pelo Headscale).
 # Liberar a interface tailscale0 inteira evita criar regra por porta para
