@@ -46,6 +46,8 @@
     - "{{ evolution_go_data_volume }}"
     - "{{ evolution_go_logs_volume }}"
 
+# _evolution_go_env contém GLOBAL_API_KEY e DSNs com senha. Qualquer task que o
+# consuma DEVE ter no_log: true (idem o docker_container abaixo).
 - name: Definir env da Evolution GO
   no_log: true
   set_fact:
@@ -93,7 +95,9 @@
     security_opts:
       - "no-new-privileges:true"
     healthcheck:
-      # /server/ok é público (200 {"status":"ok"}); a imagem alpine tem busybox wget.
+      # /server/ok é público (200 {"status":"ok"}). Imagem alpine tem busybox wget
+      # (validado: `docker run ... evoapicloud/evolution-go:0.7.1` → wget presente,
+      # /usr/bin/wget; curl ausente; healthcheck observado "healthy" em smoke test).
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:{{ evolution_go_port }}/server/ok"]
       interval: 30s
       timeout: 10s

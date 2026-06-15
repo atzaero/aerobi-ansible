@@ -138,6 +138,7 @@ postgres_apps:
 
   # Evolution GO (gateway WhatsApp, epic #137) — DOIS bancos, mesmo usuário.
   # auth: credenciais + sessão do WhatsApp (whatsmeow). users: instâncias (GORM).
+  # Requer vault_evolution_go_db_password no vault (idem os demais apps acima).
   - name: evolution_go_auth
     db: "{{ evolution_go_auth_db }}"
     user: "{{ evolution_go_db_user }}"
