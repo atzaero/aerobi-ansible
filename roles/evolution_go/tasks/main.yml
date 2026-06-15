@@ -52,8 +52,9 @@
   no_log: true
   set_fact:
     _evolution_go_env:
-      # Servidor
-      SERVER_PORT: "{{ evolution_go_port }}"
+      # Servidor — | string: docker_container exige env como string; sem o filtro
+      # o jinja2 native preserva o int de evolution_go_port e o módulo rejeita.
+      SERVER_PORT: "{{ evolution_go_port | string }}"
       CLIENT_NAME: "{{ evolution_go_client_name }}"
       OS_NAME: "Evolution GO"
       TZ: "America/Sao_Paulo"
