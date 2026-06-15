@@ -1,0 +1,42 @@
+---
+# Defaults: evolution_go
+#
+# Gateway de WhatsApp (Go/whatsmeow) consumido pela aerobi-api para notificar
+# coordenadores quando um movement é criado (aerobi-api#304).
+#
+# Superfície confirmada no spike #138 — ver docs/EVOLUTION_GO.md.
+# Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
+
+# Imagem pinada — bumpar revisando
+# https://github.com/evolution-foundation/evolution-go/releases (VERSION do repo).
+# Validar com `docker manifest inspect <imagem>:<tag>` antes de aplicar.
+evolution_go_image: evoapicloud/evolution-go
+evolution_go_version: "0.7.1"
+
+evolution_go_container_name: evolution_go
+
+# Porta HTTP interna (SERVER_PORT). O app NÃO tem default no código — setar é
+# obrigatório. Bind sempre em 127.0.0.1; exposição via nginx (tailnet-only).
+evolution_go_port: 4000
+
+# Volumes locais. A sessão do WhatsApp persiste no Postgres (whatsmeow sqlstore),
+# NÃO aqui — estes guardam logs e estado local. Ver docs/EVOLUTION_GO.md.
+evolution_go_data_volume: evolution_go_data
+evolution_go_logs_volume: evolution_go_logs
+
+# Bancos PostgreSQL dedicados (devem casar com postgres_apps no inventory).
+evolution_go_auth_db: evolution_go_auth
+evolution_go_users_db: evolution_go_users
+evolution_go_db_user: evolution_go_user
+
+# Identificação / comportamento
+evolution_go_client_name: aerobi
+evolution_go_connect_on_startup: "true"
+# Não armazenamos o histórico de mensagens (só enviamos notificações).
+evolution_go_database_save_messages: "false"
+
+# Segredos — definidos no vault per-value; default 'changeme' dispara fail-fast.
+#   evolution_go_db_password <- vault_evolution_go_db_password
+#   evolution_go_api_key     <- vault_evolution_go_api_key  (GLOBAL_API_KEY)
+evolution_go_db_password: "changeme"
+evolution_go_api_key: "changeme"

@@ -136,6 +136,18 @@ postgres_apps:
     user: headscale_user
     password: "{{ vault_headscale_db_password }}"
 
+  # Evolution GO (gateway WhatsApp, epic #137) — DOIS bancos, mesmo usuário.
+  # auth: credenciais + sessão do WhatsApp (whatsmeow). users: instâncias (GORM).
+  # Requer vault_evolution_go_db_password no vault (idem os demais apps acima).
+  - name: evolution_go_auth
+    db: "{{ evolution_go_auth_db }}"
+    user: "{{ evolution_go_db_user }}"
+    password: "{{ evolution_go_db_password }}"
+  - name: evolution_go_users
+    db: "{{ evolution_go_users_db }}"
+    user: "{{ evolution_go_db_user }}"
+    password: "{{ evolution_go_db_password }}"
+
 # ------------------------------------------------------------
 # Vaultwarden — cofre de senhas da equipe
 # ------------------------------------------------------------
@@ -304,6 +316,40 @@ uptime_kuma_domain: "status.aerobi.com.br"
 #
 sftpgo_domain: "sftp.aerobi.com.br"
 sftpgo_admin_password: "{{ vault_sftpgo_admin_password }}"
+
+# ------------------------------------------------------------
+# Evolution GO — gateway de WhatsApp (epic #137)
+# ------------------------------------------------------------
+# API em Go (whatsmeow) consumida pela aerobi-api para notificar coordenadores
+# quando um movement é criado (aerobi-api#304). Superfície confirmada no spike
+# #138 — ver docs/EVOLUTION_GO.md.
+#
+# Exposição: TAILNET-ONLY. A aerobi-api (mesma VPS) consome via rede warpgate em
+# http://evolution_go:4000 — a API de envio NÃO vai à internet pública.
+#
+# Vault — adicione antes de aplicar setup_evolution_go.yml:
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_evolution_go_db_password' \
+#     >> inventory/prod/group_vars/all/vault.yml
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_evolution_go_api_key' \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+# DNS no Registro.br (antes do setup_app.yml — certbot HTTP-01):
+#   evolution.aerobi.com.br → A → 187.127.6.20
+# Extra DNS record do Headscale (evolution → 100.64.0.1) já em
+# roles/headscale/defaults/main.yml. Vhost tailnet-only:
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=evolution_go app_domain=evolution.aerobi.com.br \
+#         app_port=4000 vhost_tailnet_only=true vhost_websocket_enabled=true"
+#
+evolution_go_domain: "evolution.aerobi.com.br"
+evolution_go_port: 4000
+evolution_go_auth_db: evolution_go_auth
+evolution_go_users_db: evolution_go_users
+evolution_go_db_user: evolution_go_user
+evolution_go_db_password: "{{ vault_evolution_go_db_password }}"
+evolution_go_api_key: "{{ vault_evolution_go_api_key }}"
 
 # ------------------------------------------------------------
 # Staging — ambiente de homologação co-localizado na MESMA VPS
