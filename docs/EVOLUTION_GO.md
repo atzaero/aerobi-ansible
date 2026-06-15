@@ -28,6 +28,7 @@ consome para notificar coordenadores quando um *movement* é criado.
 | MinIO/S3 | Opcional (`MINIO_ENABLED=false`), só p/ mídia | `loadMinioConfig` só roda se `MINIO_ENABLED=true` |
 | Sessão WhatsApp | **Persiste no Postgres** (whatsmeow `sqlstore`), **não** em volume de arquivo | `pkg/whatsmeow/service/whatsmeow.go`: `sqlstore.Container` |
 | Manager UI + Swagger | Embutidos na imagem (`/manager/dist`, `/swagger/index.html`) | `Dockerfile` |
+| Health endpoint | `GET /server/ok` → `200 {"status":"ok"}` (**público**, sem `apikey`) | `pkg/server/handler/server_handler.go` + `routes.go` (`eng.GET("/server/ok", ...)`) |
 
 ## Autenticação — dois níveis (header `apikey` em ambos)
 
@@ -116,12 +117,44 @@ Isso respeita a regra estrita #1 (CLAUDE.md) e a postura tailnet-only do repo
 | Header de auth | `apikey: <EVOLUTION_GO_API_KEY>` |
 | Envio | `POST /send/text` com `{"number":"55...","text":"..."}` |
 
-## Itens em aberto (próximas subs)
+## Como aplicar (sequência pós-merge, em prod)
 
-- #139 role `evolution_go` (container/warpgate/volume/healthcheck/no-new-privileges).
-- #140 DBs `evolution_go_auth` + `evolution_go_users` + segredos
-  `vault_evolution_go_db_password`, `vault_evolution_go_api_key`.
-- #141 playbook `setup_evolution_go.yml` + inventory (`evolution_go_port: 4000`).
-- #142 vhost tailnet-only + Certbot + DNS A + extra_records do Headscale.
-- #143 criar instância, escanear QR (1x, exige o celular do número), validar
-  `POST /send/text` ponta a ponta; documentar recuperação de sessão.
+Rodar **depois** do merge (regra do repo: `main` reflete o estado real da VPS).
+
+```bash
+# 1. Segredos no vault (uma vez) — ver inventory/.../all.yml (seção Evolution GO):
+#    vault_evolution_go_db_password, vault_evolution_go_api_key (GLOBAL_API_KEY)
+
+# 2. Bancos + container (idempotente)
+ansible-playbook -i inventory/prod playbooks/setup_evolution_go.yml
+
+# 3. DNS A no Registro.br: evolution.aerobi.com.br -> 187.127.6.20 (aguardar propagar)
+dig +short evolution.aerobi.com.br @1.1.1.1
+
+# 4. Extra DNS record do Headscale (já em roles/headscale/defaults/main.yml) -> reaplicar
+ansible-playbook -i inventory/prod playbooks/setup_headscale.yml
+
+# 5. Vhost tailnet-only + TLS
+ansible-playbook -i inventory/prod playbooks/setup_app.yml \
+  -e "app_name=evolution_go app_domain=evolution.aerobi.com.br \
+      app_port=4000 vhost_tailnet_only=true vhost_websocket_enabled=true"
+```
+
+## Pendência: linkar o número (#143 — passo manual)
+
+Exige o **celular físico do número de WhatsApp do negócio** (escanear QR uma vez):
+
+1. Criar instância (apikey = `GLOBAL_API_KEY`):
+   `POST /instance/create` `{"name":"aerobi","token":"<token-da-instancia>"}`
+   — guardar o `token` no vault como `vault_evolution_go_instance_token`.
+2. Conectar e pegar o QR (apikey = token da instância):
+   `POST /instance/connect` → `GET /instance/qr` (ou pelo manager em
+   `https://evolution.aerobi.com.br`, via tailnet).
+3. Escanear o QR no WhatsApp do número (Aparelhos conectados).
+4. Validar envio real: `POST /send/text` `{"number":"55...","text":"teste"}`.
+5. Repassar o `token` da instância à aerobi-api como `EVOLUTION_GO_API_KEY`
+   (aerobi-api#304) — via secret, nunca em texto claro.
+
+**Recuperação de sessão:** a sessão vive no DB `evolution_go_auth`. Restaurar o
+backup do Postgres restaura a sessão. Só é preciso reescanear o QR se o número for
+deslogado no celular ou o DB `evolution_go_auth` for perdido.

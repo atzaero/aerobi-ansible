@@ -32,6 +32,7 @@ Subdomínios em `aerobi.com.br` apontando para `187.127.6.20`:
 | `s3-console.aerobi.com.br` | infra admin | MinIO Console | 9001 | **tailnet-only** | `setup_minio.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`) |
 | `status.aerobi.com.br` | infra admin | Uptime Kuma | 3001 | **tailnet-only** | `setup_uptime_kuma.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`) |
 | `sftp.aerobi.com.br` | infra admin | SFTP Go (web UI) | 8083 | **tailnet-only** | `setup_sftpgo.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true vhost_client_max_body_size=5g`) |
+| `evolution.aerobi.com.br` | infra admin | Evolution GO (manager/QR/Swagger) | 4000 | **tailnet-only** | `setup_evolution_go.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`). API de envio consumida pela aerobi-api via `evolution_go:4000` na `warpgate` |
 
 DNS criado no Registro.br. Procedimento detalhado em [`REGISTRO_BR.md`](REGISTRO_BR.md).
 
@@ -136,6 +137,7 @@ api.aerobi.com.br                    público
 vault.aerobi.com.br                  público + /admin tailnet-only
 s3-console.aerobi.com.br             tailnet-only
 status.aerobi.com.br                 tailnet-only
+evolution.aerobi.com.br              tailnet-only
 ```
 
 ## Quando reconsiderar

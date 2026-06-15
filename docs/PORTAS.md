@@ -33,6 +33,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 | 3100 | aerobi-web-staging | `127.0.0.1` | Apenas via Nginx em `staging.aerobi.com.br` (frontend de staging; `setup_staging.yml`) |
 | 3333 | aerobi-api | `127.0.0.1` | Apenas via Nginx em `api.aerobi.com.br` |
 | 3433 | aerobi-api-staging | `127.0.0.1` | Apenas via Nginx em `api.staging.aerobi.com.br` (API de staging; `setup_staging.yml`) |
+| 4000 | Evolution GO | `127.0.0.1` | Apenas via Nginx em `evolution.aerobi.com.br` (tailnet-only). Gateway WhatsApp consumido pela aerobi-api via rede `warpgate` em `evolution_go:4000` (epic #137). `SERVER_PORT` interno = 4000 |
 | 5432 | PostgreSQL 17 | `127.0.0.1` (apps) + `100.64.0.1` (tailnet via socat sidecar) | Apps via rede docker `warpgate`; admin via DBeaver direto em `100.64.0.1:5432` (sem SSH tunnel — issue #7 fechada via `roles/postgres_tailnet_proxy/`) |
 | 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |
 | 8080 | Headscale | `127.0.0.1` | Apenas via Nginx em `headscale.aerobi.com.br` |
@@ -63,6 +64,7 @@ Endpoints administrativos não devem ficar expostos publicamente. O padrão da p
 | `https://s3-console.aerobi.com.br` | Painel MinIO admin — criar/deletar buckets, gerar access keys. Vhost-level via flag `vhost_tailnet_only=true` em `setup_app.yml`. |
 | `https://status.aerobi.com.br` | Painel Uptime Kuma — criar/editar monitores, canais de notificação. Vhost-level via `vhost_tailnet_only=true`. |
 | `https://sftp.aerobi.com.br` | Web admin do SFTP Go — criar/editar users SFTP, ver logs. Servidor SFTP também só pela tailnet (`100.64.0.1:2022`). Vhost-level via `vhost_tailnet_only=true`. |
+| `https://evolution.aerobi.com.br` | Manager/QR/Swagger da Evolution GO (gateway WhatsApp). A API de envio que dispara mensagens do número do negócio é consumida só internamente pela aerobi-api (`evolution_go:4000` na `warpgate`), nunca pública. Vhost-level via `vhost_tailnet_only=true`. |
 
 ### Como aplicar em novo serviço admin
 
