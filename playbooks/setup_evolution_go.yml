@@ -1,0 +1,103 @@
+---
+# Playbook: setup_evolution_go.yml
+#
+# Provisiona a Evolution GO (gateway de WhatsApp) na VPS:
+#   1. Cria os bancos PostgreSQL dedicados (evolution_go_auth, evolution_go_users)
+#   2. Sobe o container Evolution GO na rede warpgate (bind 127.0.0.1)
+#
+# A exposição via nginx/TLS é um passo SEPARADO e tailnet-only (ver abaixo).
+#
+# PRÉ-REQUISITOS:
+#   1. setup_vps.yml executado (Docker, Nginx, Firewall)
+#   2. setup_database.yml executado (PostgreSQL rodando)
+#   3. Vault configurado:
+#        vault_evolution_go_db_password  — senha do banco PostgreSQL
+#        vault_evolution_go_api_key      — GLOBAL_API_KEY (admin da API)
+#
+# Uso:
+#   ansible-playbook -i inventory/prod playbooks/setup_evolution_go.yml
+#
+# Exposição tailnet-only (DEPOIS deste playbook — ver docs/EVOLUTION_GO.md):
+#   1. DNS A: evolution.aerobi.com.br -> 187.127.6.20 (propagado p/ certbot HTTP-01)
+#   2. Extra DNS record do Headscale (evolution -> 100.64.0.1) já em
+#      roles/headscale/defaults/main.yml → reaplicar setup_headscale.yml
+#   3. ansible-playbook playbooks/setup_app.yml \
+#        -e "app_name=evolution_go app_domain=evolution.aerobi.com.br \
+#            app_port=4000 vhost_tailnet_only=true vhost_websocket_enabled=true"
+#      (app_port = evolution_go_port; default 4000)
+#
+# A aerobi-api consome internamente: http://evolution_go:4000 (rede warpgate)
+# — NÃO pelo domínio público (aerobi-api#304).
+#
+# Linkar o número de WhatsApp (criar instância + QR) e validar sendText: #143.
+
+- name: Provisionar Evolution GO
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar variáveis obrigatórias
+      fail:
+        msg: >
+          A variável '{{ item }}' é obrigatória.
+          Adicione ao vault: ansible-vault edit inventory/prod/group_vars/all/vault.yml
+      when: vars[item] | default('') in ['', 'changeme']
+      loop:
+        - evolution_go_domain
+        - evolution_go_db_password
+        - evolution_go_api_key
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  Provisionando Evolution GO"
+          - "============================================"
+          - "  Domínio    : {{ evolution_go_domain }} (tailnet-only)"
+          - "  Porta      : {{ evolution_go_port }} (bind 127.0.0.1)"
+          - "  Bancos     : {{ evolution_go_auth_db }} + {{ evolution_go_users_db }}"
+          - "  Container  : {{ evolution_go_container_name }}"
+          - "  Rede       : {{ docker_network_name }}"
+          - "  URL interna: http://{{ evolution_go_container_name }}:{{ evolution_go_port }}"
+          - "============================================"
+
+    - name: Provisionar bancos de dados da Evolution GO no PostgreSQL
+      include_role:
+        name: postgres_databases
+      vars:
+        postgres_apps:
+          - name: evolution_go_auth
+            db: "{{ evolution_go_auth_db }}"
+            user: "{{ evolution_go_db_user }}"
+            password: "{{ evolution_go_db_password }}"
+          - name: evolution_go_users
+            db: "{{ evolution_go_users_db }}"
+            user: "{{ evolution_go_db_user }}"
+            password: "{{ evolution_go_db_password }}"
+
+  roles:
+    - role: evolution_go
+
+  post_tasks:
+    - name: Verificar saúde do container
+      community.docker.docker_container_info:
+        name: "{{ evolution_go_container_name }}"
+      register: evo_info
+
+    - name: Exibir status do container
+      debug:
+        msg: "Status: {{ evo_info.container.State.Status }} | Health: {{ evo_info.container.State.Health.Status | default('N/A') }}"
+
+    - name: Exibir resumo final
+      debug:
+        msg:
+          - "============================================"
+          - "  Evolution GO provisionada com sucesso!"
+          - "============================================"
+          - "  URL interna : http://{{ evolution_go_container_name }}:{{ evolution_go_port }} (warpgate)"
+          - "  Container   : {{ evolution_go_container_name }}"
+          - "============================================"
+          - "  Próximos passos:"
+          - "  1. Expor tailnet-only (DNS A + extra_records + setup_app.yml) — ver header"
+          - "  2. Criar instância + escanear QR + validar sendText (#143)"
+          - "============================================"
