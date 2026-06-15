@@ -1,0 +1,109 @@
+---
+# Role: evolution_go
+#
+# Sobe a Evolution GO (API de WhatsApp em Go) via Docker na rede `warpgate`.
+# A exposição HTTP/TLS é responsabilidade do nginx (vhost tailnet-only via
+# setup_app.yml) — esta role NÃO mexe em nginx.
+#
+# SEGURANÇA:
+#   - Bind apenas em 127.0.0.1 — nunca direto na internet (CLAUDE.md regra 2)
+#   - GLOBAL_API_KEY e senha do banco no vault (fail-fast se 'changeme')
+#   - no-new-privileges no container
+#   - Sessão do WhatsApp e credenciais persistem no PostgreSQL (não em volume)
+#
+# PRÉ-REQUISITOS:
+#   - Docker + rede warpgate (roles: docker, docker_network)
+#   - PostgreSQL rodando com os bancos evolution_go_auth e evolution_go_users
+#     provisionados (playbooks/setup_evolution_go.yml cuida via postgres_databases)
+
+# ----------------------------------------------------------------
+# Validação de credenciais (fail-fast)
+# ----------------------------------------------------------------
+
+- name: Validar GLOBAL_API_KEY da Evolution GO
+  fail:
+    msg: >
+      evolution_go_api_key vazio ou 'changeme'
+      (verifique vault_evolution_go_api_key no vault). Configure antes de aplicar.
+  when: evolution_go_api_key | default('') in ['changeme', '', None]
+
+- name: Validar credenciais do banco Evolution GO
+  fail:
+    msg: >
+      evolution_go_db_password vazio ou 'changeme'
+      (verifique vault_evolution_go_db_password no vault). Configure antes de aplicar.
+  when: evolution_go_db_password | default('') in ['changeme', '', None]
+
+# ----------------------------------------------------------------
+# Container
+# ----------------------------------------------------------------
+
+- name: Garantir que os volumes existem
+  community.docker.docker_volume:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ evolution_go_data_volume }}"
+    - "{{ evolution_go_logs_volume }}"
+
+- name: Definir env da Evolution GO
+  no_log: true
+  set_fact:
+    _evolution_go_env:
+      # Servidor
+      SERVER_PORT: "{{ evolution_go_port }}"
+      CLIENT_NAME: "{{ evolution_go_client_name }}"
+      OS_NAME: "Evolution GO"
+      TZ: "America/Sao_Paulo"
+      # Segurança (obrigatório) — apikey administrativo
+      GLOBAL_API_KEY: "{{ evolution_go_api_key }}"
+      # Banco (obrigatório) — duas DSNs; sessão do WhatsApp vive no auth DB.
+      # sslmode=disable: tráfego container↔container na rede warpgate.
+      POSTGRES_AUTH_DB: "postgresql://{{ evolution_go_db_user }}:{{ evolution_go_db_password }}@{{ postgres_container_name }}:5432/{{ evolution_go_auth_db }}?sslmode=disable"
+      POSTGRES_USERS_DB: "postgresql://{{ evolution_go_db_user }}:{{ evolution_go_db_password }}@{{ postgres_container_name }}:5432/{{ evolution_go_users_db }}?sslmode=disable"
+      DATABASE_SAVE_MESSAGES: "{{ evolution_go_database_save_messages }}"
+      # Conexão / logs
+      CONNECT_ON_STARTUP: "{{ evolution_go_connect_on_startup }}"
+      WEBHOOK_FILES: "false"
+      LOG_DIRECTORY: "/app/logs"
+      LOGTYPE: "console"
+      # Integrações opcionais desligadas (MVP de notificação de texto)
+      MINIO_ENABLED: "false"
+      AMQP_URL: ""
+      AMQP_GLOBAL_ENABLED: "false"
+      NATS_URL: ""
+      NATS_GLOBAL_ENABLED: "false"
+
+- name: Subir container Evolution GO {{ evolution_go_version }}
+  no_log: true
+  community.docker.docker_container:
+    name: "{{ evolution_go_container_name }}"
+    image: "{{ evolution_go_image }}:{{ evolution_go_version }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      # Expõe apenas em localhost — acesso externo via nginx (tailnet-only)
+      - "127.0.0.1:{{ evolution_go_port }}:{{ evolution_go_port }}"
+    env: "{{ _evolution_go_env }}"
+    volumes:
+      - "{{ evolution_go_data_volume }}:/app/dbdata"
+      - "{{ evolution_go_logs_volume }}:/app/logs"
+    networks:
+      - name: "{{ docker_network_name }}"
+    security_opts:
+      - "no-new-privileges:true"
+    healthcheck:
+      # /server/ok é público (200 {"status":"ok"}); a imagem alpine tem busybox wget.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:{{ evolution_go_port }}/server/ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+- name: Aguardar Evolution GO inicializar
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ evolution_go_port }}"
+    delay: 5
+    timeout: 90
+    msg: "Evolution GO não respondeu na porta {{ evolution_go_port }} em 90s"
