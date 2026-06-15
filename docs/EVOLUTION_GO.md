@@ -140,6 +140,29 @@ ansible-playbook -i inventory/prod playbooks/setup_app.yml \
       app_port=4000 vhost_tailnet_only=true vhost_websocket_enabled=true"
 ```
 
+## ⚠️ Licença / ativação (gate confirmado em prod)
+
+A Evolution GO é **Apache 2.0 (com condições de marca)**, mas **exige ativação de
+licença para operar**: a API responde **`503 LICENSE_REQUIRED`** até ser ativada
+(`GET /` → `{"code":"LICENSE_REQUIRED", ... "Open the manager to activate"}`).
+
+- **Ativação** é feita na **tela do manager** (`/manager` → `/manager/login`):
+  informa a **API URL** e a **`GLOBAL_API_KEY`** (= `vault_evolution_go_api_key`)
+  e completa o fluxo de registro. Recuperar a chave:
+  `ansible localhost -m debug -a "var=vault_evolution_go_api_key" -e "@inventory/prod/group_vars/all/vault.yml" --connection=local`.
+- O README **não informa preço** (grátis/trial/pago). Licenciamento:
+  `suporte@evofoundation.com.br`. **Confirmar a viabilidade comercial antes de
+  depender disso em produção** — sem ativação, o `POST /send/text` não funciona.
+
+## Gotchas de deploy (validados em prod)
+
+- **`SERVER_PORT` deve ser string** no env do `docker_container`. `evolution_go_port`
+  é int e o `community.docker.docker_container` rejeita env não-string
+  ("Ambiguous env options must be wrapped in quotes"). Fix: `"{{ evolution_go_port | string }}"`.
+- **Manager UI em `/manager`** (login `/manager/login`); `/` retorna 503 enquanto não ativado.
+- **Pull da imagem pode dar timeout no 1º apply** — se o `docker_container` falhar no
+  pull, fazer `docker pull evoapicloud/evolution-go:<tag>` na VPS e reaplicar.
+
 ## Pendência: linkar o número (#143 — passo manual)
 
 Exige o **celular físico do número de WhatsApp do negócio** (escanear QR uma vez):
