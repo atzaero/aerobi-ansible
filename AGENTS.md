@@ -118,6 +118,16 @@ Pattern em `roles/*/defaults/main.yml`: senha default = `changeme`. Pattern em
 Tasks que manipulam secret usam `no_log: true`. Como adicionar secret novo está
 documentado no header do `inventory/prod/group_vars/all/vault.yml`.
 
+**Onde cada variável mora** (não é "tudo no vault"):
+
+- **Secret que um playbook usa** (senha de DB, admin token, API key injetada pela
+  role) → **vault per-value deste repo** + fail-fast.
+- **Config não-secreta** (domínio, porta, nome de DB/user, container) → `all.yml`
+  em texto claro — de propósito, pra ficar legível/diffável no git.
+- **Secret consumido por uma app externa** (ex.: token de instância usado só pela
+  `aerobi-api`) → **secrets do repo da app** (GitHub Environments), **não** no vault
+  daqui — evita drift e mantém o secret junto de quem o consome.
+
 ### 6. Merges e operações destrutivas
 
 - Branches: `<tipo>/<num-issue>-<slug>` (ex: `feat/12-sftpgo`, `fix/7-docker-nat`).

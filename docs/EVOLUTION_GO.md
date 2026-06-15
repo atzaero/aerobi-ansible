@@ -169,14 +169,23 @@ Exige o **celular físico do número de WhatsApp do negócio** (escanear QR uma 
 
 1. Criar instância (apikey = `GLOBAL_API_KEY`):
    `POST /instance/create` `{"name":"aerobi","token":"<token-da-instancia>"}`
-   — guardar o `token` no vault como `vault_evolution_go_instance_token`.
+   — o `token` é a **chave de envio** (auth do `/send/text`, NÃO a global). Ele
+   **não** vai no vault deste repo: é secret consumido só pela aerobi-api → mora nos
+   **secrets do repo da app** (passo 5). Refetchável via `GET /instance/all`
+   (apikey = global), campo `.data[].token`.
 2. Conectar e pegar o QR (apikey = token da instância):
    `POST /instance/connect` → `GET /instance/qr` (ou pelo manager em
    `https://evolution.aerobi.com.br`, via tailnet).
 3. Escanear o QR no WhatsApp do número (Aparelhos conectados).
 4. Validar envio real: `POST /send/text` `{"number":"55...","text":"teste"}`.
-5. Repassar o `token` da instância à aerobi-api como `EVOLUTION_GO_API_KEY`
-   (aerobi-api#304) — via secret, nunca em texto claro.
+5. Repassar o `token` da instância à aerobi-api como `EVOLUTION_GO_API_KEY` nos
+   **GitHub Environment secrets** do repo da app (`production` + `staging`), junto de
+   `EVOLUTION_GO_BASE_URL=http://evolution_go:4000` e `EVOLUTION_GO_INSTANCE=aerobi`
+   (aerobi-api#304). Nunca em texto claro.
+
+> **Status (2026-06-15):** feito — licença ativada, instância `aerobi` conectada,
+> `POST /send/text` validado ponta a ponta, e os 3 secrets gravados nos 2 environments
+> da aerobi-api.
 
 **Recuperação de sessão:** a sessão vive no DB `evolution_go_auth`. Restaurar o
 backup do Postgres restaura a sessão. Só é preciso reescanear o QR se o número for

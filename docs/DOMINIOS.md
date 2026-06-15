@@ -55,10 +55,13 @@ Sequência (exemplo: Grafana em `monitoring.aerobi.com.br`):
 
 1. **DNS no Registro.br** (ver [`REGISTRO_BR.md`](REGISTRO_BR.md)): `monitoring → A → 187.127.6.20`. Aguardar propagação (`dig +short monitoring.aerobi.com.br @1.1.1.1`).
 
-2. **Inventory**: definir o domínio em `inventory/prod/group_vars/all/all.yml`:
-   ```yaml
-   grafana_domain: monitoring.aerobi.com.br
-   ```
+2. **Inventory + secrets**: decidir onde cada variável mora (princípio em [`AGENTS.md` regra 5](../AGENTS.md)):
+   - **Config não-secreta** (domínio, porta, nome de DB/user, container) → `all.yml` em texto claro (de propósito — fica diffável):
+     ```yaml
+     grafana_domain: monitoring.aerobi.com.br
+     ```
+   - **Secret que o playbook usa** (senha de DB, admin token, API key que a role injeta) → `vault.yml` **per-value** + referência `<svc>_x: "{{ vault_<svc>_x }}"` em `all.yml` + validação fail-fast na role. Como adicionar: header do [`vault.yml`](../inventory/prod/group_vars/all/vault.yml).
+   - **Secret consumido por uma app externa** (ex.: token/credencial que só a `aerobi-api` usa) → **secrets do repo da app** (GitHub Environments), **não** no vault deste repo.
 
 3. **Role + playbook**: criar `roles/grafana/` e `playbooks/setup_grafana.yml`. Container deve subir em `127.0.0.1` apenas.
 
