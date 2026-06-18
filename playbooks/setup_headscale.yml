@@ -29,6 +29,14 @@
 #      e substituir vault_headscale_authkey_vps no vault.yml
 #   4. Rodar `ansible-playbook -i inventory/prod playbooks/setup_vps.yml --tags tailscale`
 #      para conectar a VPS na tailnet.
+#
+# KEY DE CI (GitHub Actions, secret HEADSCALE_AUTHKEY dos repos aerobi/aerobi-api):
+#   PRECISA ser NÃO-efêmera (--reusable SEM --ephemeral). Key efêmera deleta o nó
+#   do runner ao desconectar e dispara a race poll.go:339 do Headscale 0.28.0,
+#   congelando o registro de novos nós (deadlock do control-plane) e quebrando o
+#   deploy seguinte. Ver atzaero/aerobi#961 e docs/VPN.md (tabela de tags).
+#        docker exec headscale headscale preauthkeys create \
+#          --user 1 --reusable --expiration 90d --tags tag:ci
 
 - name: Provisionar Headscale
   hosts: all
