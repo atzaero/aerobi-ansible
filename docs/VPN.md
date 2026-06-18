@@ -35,10 +35,13 @@ A política ACL fica em [`roles/headscale/templates/acl.json.j2`](../roles/heads
 | `tag:vps` | A própria VPS Aerobi (backend) | `tag:airfield` (câmeras dos aeródromos) |
 | `tag:airfield` | Servidores locais em aeródromos | (recebe conexões; não inicia) |
 | `tag:dev` | Laptops e celulares de admin | `*` (tudo) |
+| `tag:ci` | Runners de GitHub Actions (deploy de `aerobi-web`/`aerobi-api`) | a VPS de deploy via tailnet | 
 
 **Importante:** a **tag não é só rótulo organizacional** — é a **identidade ACL** do device. Quando um device entra na tailnet, ele herda a tag da pre-auth key usada e fica permanentemente marcado com ela. As regras ACL acima decidem o tráfego permitido a partir dessa tag.
 
 Por isso, escolher a tag certa na hora de gerar a key é crítico: um servidor de aeródromo provisionado com `tag:dev` por engano teria acesso admin a toda a tailnet.
+
+> **⚠️ `tag:ci` PRECISA ser NÃO-efêmera.** A key `tag:ci` (usada no secret `HEADSCALE_AUTHKEY` dos repos `aerobi`/`aerobi-api`) é `--reusable` **SEM** `--ephemeral`. Com nó efêmero, o runner é deletado ao desconectar e dispara a race `poll.go:339` do Headscale 0.28.0, congelando o registro de novos nós (**deadlock do control-plane**) e quebrando o deploy seguinte. Por isso o `deploy.yml` também já removeu o `tailscale logout` do Cleanup. Difere de `tag:airfield` (single-use) e de `tag:dev` (reusable, mas pode ser efêmera). Ver [atzaero/aerobi#961](https://github.com/atzaero/aerobi/issues/961).
 
 ---
 
@@ -441,11 +444,16 @@ docker exec headscale headscale preauthkeys create \
 docker exec headscale headscale preauthkeys create \
   --user 1 --expiration 90d --tags tag:airfield
 
-# Listar keys (ativas e expiradas)
+# Criar key de CI (GitHub Actions) — reusable e NÃO-efêmera (SEM --ephemeral).
+# Efêmera dispara o deadlock do control-plane (poll.go:339) — ver atzaero/aerobi#961.
+docker exec headscale headscale preauthkeys create \
+  --user 1 --reusable --expiration 90d --tags tag:ci
+
+# Listar keys (ativas e expiradas) — campo `ephemeral` distingue o tipo
 docker exec headscale headscale preauthkeys list --user 1
 
-# Expirar uma key (revoga)
-docker exec headscale headscale preauthkeys expire <KEY>
+# Expirar uma key (revoga) — por ID (ver `id` no list acima)
+docker exec headscale headscale preauthkeys expire --id <ID> --force
 ```
 
 ### ACL (políticas de acesso)
