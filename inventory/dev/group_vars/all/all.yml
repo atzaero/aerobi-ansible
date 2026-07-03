@@ -113,13 +113,9 @@ minio_bind_address: "0.0.0.0"
 minio_container_uid: 1001
 minio_container_gid: 1001
 minio_buckets:
-  - name: aerobi-dev-uploads
-    public_read: false
-  # imagens de leitura de matrículas de aeronaves (aircraft_reading) — ref: aerobi-api#180
-  - name: aerobi-dev-readings
-    public_read: false
   # Bucket ÚNICO por app/ambiente — padrão de storage da aerobi-api (épico #444);
-  # organiza por prefixo de entidade dentro dele. -readings/-uploads são legados.
+  # organiza por prefixo de entidade dentro dele (groups/, movements/, …). Os
+  # buckets -readings/-uploads legados foram aposentados (removidos da gestão).
   - name: aerobi-dev
     public_read: false
 

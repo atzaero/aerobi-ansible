@@ -264,20 +264,15 @@ minio_bind_address: "127.0.0.1"
 minio_container_uid: 1001
 minio_container_gid: 1001
 minio_buckets:
-  - name: aerobi-prod-uploads
-    public_read: false
+  # Backups de infra (postgres/vaultwarden/valkey/sftpgo por prefixo) — não é
+  # storage do app.
   - name: aerobi-prod-backups
     public_read: false
-  # imagens de leitura de matrículas de aeronaves (aircraft_reading) — ref: aerobi-api#180
-  - name: aerobi-prod-readings
-    public_read: false
-  # staging é co-localizado na VPS de prod e compartilha esta MESMA instância
-  # MinIO, então seu bucket vive aqui (não há inventory de staging dedicado).
-  - name: aerobi-staging-readings
-    public_read: false
   # Bucket ÚNICO por app/ambiente — padrão de storage da aerobi-api (épico #444):
-  # a app organiza por prefixo de entidade dentro dele (users/, groups/, …).
-  # Os -readings/-uploads acima são legados e serão aposentados após o cutover.
+  # a app organiza por prefixo de entidade dentro dele (groups/, movements/, …).
+  # staging é co-localizado nesta MESMA instância MinIO (não há inventory próprio).
+  # Os buckets -readings/-uploads legados foram aposentados (removidos da gestão;
+  # objetos remanescentes na VPS são descartáveis, apagáveis manualmente).
   - name: aerobi-prod
     public_read: false
   - name: aerobi-staging
