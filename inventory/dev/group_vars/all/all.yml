@@ -118,6 +118,10 @@ minio_buckets:
   # imagens de leitura de matrículas de aeronaves (aircraft_reading) — ref: aerobi-api#180
   - name: aerobi-dev-readings
     public_read: false
+  # Bucket ÚNICO por app/ambiente — padrão de storage da aerobi-api (épico #444);
+  # organiza por prefixo de entidade dentro dele. -readings/-uploads são legados.
+  - name: aerobi-dev
+    public_read: false
 
 # ------------------------------------------------------------
 # Ambiente

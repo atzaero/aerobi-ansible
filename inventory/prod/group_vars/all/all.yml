@@ -275,6 +275,13 @@ minio_buckets:
   # MinIO, então seu bucket vive aqui (não há inventory de staging dedicado).
   - name: aerobi-staging-readings
     public_read: false
+  # Bucket ÚNICO por app/ambiente — padrão de storage da aerobi-api (épico #444):
+  # a app organiza por prefixo de entidade dentro dele (users/, groups/, …).
+  # Os -readings/-uploads acima são legados e serão aposentados após o cutover.
+  - name: aerobi-prod
+    public_read: false
+  - name: aerobi-staging
+    public_read: false
 
 # ------------------------------------------------------------
 # Uptime Kuma — status + monitoring + domain expiry alerts
