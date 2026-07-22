@@ -58,6 +58,8 @@
         vhost_client_max_body_size: "12m"
 
     # API de staging — pública, mesmas opções do aerobi-api de produção.
+    # client_max_body_size=12m: uploads da API (documentos/imagens) têm teto
+    # de 10 MB na aplicação; o default 1m do nginx devolvia 413 (issue #155).
     - name: Vhost + SSL — API de staging
       include_role:
         name: nginx_vhost
@@ -65,6 +67,7 @@
         vhost_app_name: aerobi-api-staging
         vhost_domain: "{{ aerobi_api_staging_domain }}"
         vhost_port: "{{ app_ports.staging['aerobi-api'] }}"
+        vhost_client_max_body_size: "12m"
 
   post_tasks:
     - name: Exibir resumo
