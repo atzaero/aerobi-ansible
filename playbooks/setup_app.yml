@@ -16,6 +16,14 @@
 #   app_domain : domínio público configurado no DNS (ex: elvisea.dev)
 #   app_port   : porta interna do container Docker (ex: 3003)
 #
+# Parâmetros opcionais via -e (repassados à role nginx_vhost):
+#   vhost_client_max_body_size : teto de upload do nginx (ex: 12m). Sem ele,
+#                                vale o default 1m do nginx — apps com upload
+#                                (aerobi-api/web: 12m, minio_api: 25m) DEVEM
+#                                passá-lo, senão uploads >1MB dão 413.
+#   vhost_websocket_enabled    : true para apps com WebSocket
+#   vhost_tailnet_only         : true para vhost restrito à tailnet
+#
 # Exemplos para outros projetos:
 #   ansible-playbook playbooks/setup_app.yml \
 #     -e "app_name=viki_assistant app_domain=viki.elvisea.dev app_port=3001"

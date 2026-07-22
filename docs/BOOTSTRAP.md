@@ -255,10 +255,14 @@ Após apply, com `tailscale up` no laptop, abrir `https://status.aerobi.com.br` 
 
 ```bash
 ansible-playbook playbooks/setup_app.yml \
-  -e "app_name=aerobi_api app_domain=api.aerobi.com.br app_port=3333"
+  -e "app_name=aerobi-api app_domain=api.aerobi.com.br app_port=3333 \
+      vhost_client_max_body_size=12m"
 ```
 
 Cria vhost + cert para `api.aerobi.com.br`. O container `aerobi-api` em si é deployado via GitHub Actions (fora do escopo deste runbook).
+
+- `app_name` é `aerobi-api` com **hífen** — é o nome do vhost já existente em `/etc/nginx/sites-available/` e do diretório em `/home/deploy/apps/` (underscore criaria um vhost duplicado).
+- `vhost_client_max_body_size=12m` é obrigatório: os uploads da API (documentos/imagens) têm teto de 10 MB na aplicação, e o default de 1m do nginx devolvia 413 (issue #155; paridade com o aerobi-web).
 
 ## Passo 9 — SFTP Go (file transfer tailnet-only)
 
