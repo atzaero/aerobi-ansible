@@ -148,6 +148,13 @@ postgres_apps:
     user: "{{ evolution_go_db_user }}"
     password: "{{ evolution_go_db_password }}"
 
+  # GlitchTip (error tracking, issue #27) — fila/cache também vivem neste banco
+  # (django-vtasks; sem Valkey). Requer vault_glitchtip_db_password no vault.
+  - name: glitchtip
+    db: "{{ glitchtip_db }}"
+    user: "{{ glitchtip_db_user }}"
+    password: "{{ glitchtip_db_password }}"
+
 # ------------------------------------------------------------
 # Vaultwarden — cofre de senhas da equipe
 # ------------------------------------------------------------
@@ -352,6 +359,52 @@ evolution_go_users_db: evolution_go_users
 evolution_go_db_user: evolution_go_user
 evolution_go_db_password: "{{ vault_evolution_go_db_password }}"
 evolution_go_api_key: "{{ vault_evolution_go_api_key }}"
+
+# ------------------------------------------------------------
+# GlitchTip — error tracking self-hosted (issue #27)
+# ------------------------------------------------------------
+# Compatível com SDKs Sentry; consumido pela aerobi-api (#131) e aerobi-web
+# (atzaero/aerobi#1239). Container único all_in_one (GlitchTip 6); fila e
+# cache no próprio Postgres (sem Valkey).
+#
+# Exposição: vhost PÚBLICO (não tailnet-only) — o SDK do browser envia eventos
+# direto do navegador do usuário final para o DSN. Sem extra_records no
+# Headscale. Hardening: registro fechado após criar o admin (ver abaixo).
+#
+# DNS no Registro.br (antes do setup_app.yml — certbot HTTP-01):
+#   errors.aerobi.com.br → A → 187.127.6.20
+#
+# Vault — adicione antes de aplicar setup_glitchtip.yml:
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_glitchtip_db_password' \
+#     >> inventory/prod/group_vars/all/vault.yml
+#   echo -n "$(openssl rand -hex 32)" | \
+#     ansible-vault encrypt_string --stdin-name 'vault_glitchtip_secret_key' \
+#     >> inventory/prod/group_vars/all/vault.yml
+#   echo -n '<gmail-app-password-SEM-espacos>' | \
+#     ansible-vault encrypt_string --stdin-name 'vault_glitchtip_smtp_password' \
+#     >> inventory/prod/group_vars/all/vault.yml
+#
+# Sequência:
+#   ansible-playbook playbooks/setup_glitchtip.yml
+#   ansible-playbook playbooks/setup_app.yml \
+#     -e "app_name=glitchtip app_domain=errors.aerobi.com.br app_port=8000 \
+#         vhost_client_max_body_size=50m"
+#
+# Primeiro acesso: registrar o admin com registro ABERTO; depois flip
+# glitchtip_enable_user_registration para "False", re-aplicar
+# setup_glitchtip.yml (o container é recriado com o novo env) e commitar.
+# Runbook completo: roles/glitchtip/README.md.
+#
+glitchtip_domain: "errors.aerobi.com.br"
+glitchtip_port: 8000
+glitchtip_db: glitchtip
+glitchtip_db_user: glitchtip_user
+glitchtip_db_password: "{{ vault_glitchtip_db_password }}"
+glitchtip_secret_key: "{{ vault_glitchtip_secret_key }}"
+glitchtip_smtp_password: "{{ vault_glitchtip_smtp_password }}"
+# "True" só até o admin se registrar — depois flip para "False" + re-apply.
+glitchtip_enable_user_registration: "True"
 
 # ------------------------------------------------------------
 # Staging — ambiente de homologação co-localizado na MESMA VPS

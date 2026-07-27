@@ -1,0 +1,123 @@
+---
+# Role: glitchtip
+#
+# Sobe o GlitchTip 6 (error tracking Sentry-compatible) via Docker na rede
+# `warpgate`. Container único all_in_one: web + worker vtasks + migrações no
+# boot. A exposição HTTP/TLS é responsabilidade do nginx (vhost PÚBLICO via
+# setup_app.yml) — esta role NÃO mexe em nginx.
+#
+# SEGURANÇA:
+#   - Bind apenas em 127.0.0.1 — nunca direto na internet (CLAUDE.md regra 2)
+#   - SECRET_KEY, senha do banco e senha SMTP no vault (fail-fast se 'changeme')
+#   - no-new-privileges no container
+#   - Registro de usuários aberto SÓ até o admin se registrar (ver README)
+#
+# PRÉ-REQUISITOS:
+#   - Docker + rede warpgate (roles: docker, docker_network)
+#   - PostgreSQL rodando com o banco glitchtip provisionado
+#     (playbooks/setup_glitchtip.yml cuida via postgres_databases)
+
+# ----------------------------------------------------------------
+# Validação de credenciais (fail-fast)
+# ----------------------------------------------------------------
+
+- name: Validar SECRET_KEY do GlitchTip
+  fail:
+    msg: >
+      glitchtip_secret_key vazio ou 'changeme'
+      (verifique vault_glitchtip_secret_key no vault). Configure antes de aplicar.
+  when: glitchtip_secret_key | default('') in ['changeme', '', None]
+
+- name: Validar credenciais do banco GlitchTip
+  fail:
+    msg: >
+      glitchtip_db_password vazio ou 'changeme'
+      (verifique vault_glitchtip_db_password no vault). Configure antes de aplicar.
+  when: glitchtip_db_password | default('') in ['changeme', '', None]
+
+- name: Validar senha SMTP do GlitchTip
+  fail:
+    msg: >
+      glitchtip_smtp_password vazio ou 'changeme'
+      (verifique vault_glitchtip_smtp_password no vault). Configure antes de aplicar.
+  when: glitchtip_smtp_password | default('') in ['changeme', '', None]
+
+# ----------------------------------------------------------------
+# Container
+# ----------------------------------------------------------------
+
+- name: Garantir que o volume de uploads existe
+  community.docker.docker_volume:
+    name: "{{ glitchtip_uploads_volume }}"
+    state: present
+
+# _glitchtip_env contém SECRET_KEY, DSN do Postgres e senha SMTP. Qualquer task
+# que o consuma DEVE ter no_log: true (idem o docker_container abaixo).
+- name: Definir env do GlitchTip
+  no_log: true
+  set_fact:
+    _glitchtip_env:
+      # all_in_one: web + worker vtasks + migrações automáticas no boot
+      SERVER_ROLE: "all_in_one"
+      SECRET_KEY: "{{ glitchtip_secret_key }}"
+      # Banco compartilhado (rede warpgate; hostname = nome do container).
+      # Fila e cache também vivem aqui: VALKEY_URL vazio desabilita o Valkey
+      # (GlitchTip 6 usa django-vtasks sobre o Postgres).
+      DATABASE_URL: "postgres://{{ glitchtip_db_user }}:{{ glitchtip_db_password }}@{{ postgres_container_name }}:5432/{{ glitchtip_db }}"
+      VALKEY_URL: ""
+      # URL pública COM scheme — usada em links de e-mail e validação de origem.
+      GLITCHTIP_DOMAIN: "https://{{ glitchtip_domain }}"
+      DEFAULT_FROM_EMAIL: "{{ glitchtip_from_email }}"
+      # django-environ (email_url): smtp+tls:// = SMTP com STARTTLS (porta 587).
+      # "submission://" NÃO existe nos EMAIL_SCHEMES do django-environ e derruba
+      # o settings.py no boot (infra-review #27). urlencode escapa o '@' do
+      # username (%40) e caracteres especiais da senha.
+      EMAIL_URL: "smtp+tls://{{ glitchtip_smtp_username | urlencode }}:{{ glitchtip_smtp_password | urlencode }}@{{ glitchtip_smtp_host }}:{{ glitchtip_smtp_port }}"
+      # Hardening / features — | string: docker_container exige env como string;
+      # sem o filtro o jinja2 native preserva int/bool e o módulo rejeita.
+      ENABLE_USER_REGISTRATION: "{{ glitchtip_enable_user_registration | string }}"
+      ENABLE_ORGANIZATION_CREATION: "{{ glitchtip_enable_organization_creation | string }}"
+      GLITCHTIP_RETENTION_DAYS: "{{ glitchtip_retention_days | string }}"
+      GLITCHTIP_ENABLE_UPTIME: "{{ glitchtip_enable_uptime | string }}"
+      GLITCHTIP_ENABLE_LOGS: "{{ glitchtip_enable_logs | string }}"
+      ENABLE_ADMIN: "{{ glitchtip_enable_admin | string }}"
+      ENABLE_OPENAPI: "{{ glitchtip_enable_openapi | string }}"
+      VTASKS_CONCURRENCY: "{{ glitchtip_vtasks_concurrency | string }}"
+      TZ: "America/Sao_Paulo"
+
+- name: Subir container GlitchTip {{ glitchtip_version }}
+  no_log: true
+  community.docker.docker_container:
+    name: "{{ glitchtip_container_name }}"
+    image: "{{ glitchtip_image }}:{{ glitchtip_version }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      # Container escuta fixo em 8000; expõe apenas em localhost — acesso
+      # externo via nginx (vhost público em setup_app.yml)
+      - "127.0.0.1:{{ glitchtip_port }}:8000"
+    env: "{{ _glitchtip_env }}"
+    volumes:
+      - "{{ glitchtip_uploads_volume }}:/code/uploads"
+    networks:
+      - name: "{{ docker_network_name }}"
+    security_opts:
+      - "no-new-privileges:true"
+    healthcheck:
+      # /_health/ retorna 200 sem auth. Imagem python slim NÃO garante
+      # curl/wget/nc (regra 4 do AGENTS.md) — usar o próprio python, que é a
+      # runtime do app. Validar no primeiro apply:
+      #   docker exec glitchtip sh -c "command -v curl wget nc python"
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/_health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s   # primeiro boot roda as migrações Django
+
+- name: Aguardar GlitchTip inicializar
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ glitchtip_port }}"
+    delay: 5
+    timeout: 180
+    msg: "GlitchTip não respondeu na porta {{ glitchtip_port }} em 180s (primeiro boot roda migrações — conferir docker logs glitchtip)"

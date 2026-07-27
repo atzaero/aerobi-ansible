@@ -1,0 +1,108 @@
+---
+# Playbook: setup_glitchtip.yml
+#
+# Provisiona o GlitchTip (error tracking self-hosted, issue #27) na VPS:
+#   1. Cria o banco PostgreSQL dedicado (glitchtip) — fila/cache vivem nele
+#   2. Sobe o container GlitchTip 6 all_in_one na rede warpgate (bind 127.0.0.1)
+#
+# A exposição via nginx/TLS é um passo SEPARADO e PÚBLICO — o SDK do browser
+# (aerobi-web) envia eventos direto do navegador do usuário final para o DSN:
+#   1. DNS A no Registro.br: errors.aerobi.com.br -> 187.127.6.20
+#      (propagado p/ certbot HTTP-01: dig +short errors.aerobi.com.br @1.1.1.1)
+#   2. ansible-playbook playbooks/setup_app.yml \
+#        -e "app_name=glitchtip app_domain=errors.aerobi.com.br app_port=8000 \
+#            vhost_client_max_body_size=50m"
+#      (50m: envelopes de eventos + upload de sourcemaps via sentry-cli;
+#       SEM vhost_tailnet_only, SEM vhost_websocket_enabled)
+#
+# PRÉ-REQUISITOS:
+#   1. setup_vps.yml executado (Docker, Nginx, Firewall)
+#   2. setup_database.yml executado (PostgreSQL rodando)
+#   3. Vault configurado:
+#        vault_glitchtip_db_password   — senha do banco (openssl rand -hex 32)
+#        vault_glitchtip_secret_key    — SECRET_KEY Django (openssl rand -hex 32)
+#        vault_glitchtip_smtp_password — Gmail app password (SEM espaços)
+#
+# Uso:
+#   ansible-playbook -i inventory/prod playbooks/setup_glitchtip.yml
+#
+# PRIMEIRO ACESSO (runbook completo em roles/glitchtip/README.md):
+#   1. Registrar o admin em https://errors.aerobi.com.br (registro aberto)
+#   2. Flip glitchtip_enable_user_registration: "False" no inventory +
+#      re-aplicar este playbook (drift de env recria o container) + commitar
+#   3. Criar org aerobi + projetos aerobi-api / aerobi-web na UI; copiar DSNs
+#      para os GitHub Environments dos repos de app (SENTRY_DSN /
+#      NEXT_PUBLIC_SENTRY_DSN)
+
+- name: Provisionar GlitchTip
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar variáveis obrigatórias
+      fail:
+        msg: >
+          A variável '{{ item }}' é obrigatória.
+          Adicione ao vault: ansible-vault edit inventory/prod/group_vars/all/vault.yml
+      when: vars[item] | default('') in ['', 'changeme']
+      loop:
+        - glitchtip_domain
+        - glitchtip_db_password
+        - glitchtip_secret_key
+        - glitchtip_smtp_password
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  Provisionando GlitchTip"
+          - "============================================"
+          - "  Domínio   : {{ glitchtip_domain }} (PÚBLICO via nginx)"
+          - "  Porta     : {{ glitchtip_port }} (bind 127.0.0.1)"
+          - "  Banco     : {{ glitchtip_db }} (fila/cache também no Postgres)"
+          - "  Container : {{ glitchtip_container_name }} (all_in_one)"
+          - "  Rede      : {{ docker_network_name }}"
+          - "  Registro  : ENABLE_USER_REGISTRATION={{ glitchtip_enable_user_registration }}"
+          - "============================================"
+
+    - name: Provisionar banco de dados do GlitchTip no PostgreSQL
+      include_role:
+        name: postgres_databases
+      vars:
+        postgres_apps:
+          - name: glitchtip
+            db: "{{ glitchtip_db }}"
+            user: "{{ glitchtip_db_user }}"
+            password: "{{ glitchtip_db_password }}"
+
+  roles:
+    - role: glitchtip
+
+  post_tasks:
+    # no_log: Config.Env do resultado traz SECRET_KEY, DATABASE_URL e EMAIL_URL
+    # com senha — sem isso, rodar com -v despeja os segredos no log.
+    - name: Verificar saúde do container
+      no_log: true
+      community.docker.docker_container_info:
+        name: "{{ glitchtip_container_name }}"
+      register: glitchtip_info
+
+    - name: Exibir status do container
+      debug:
+        msg: "Status: {{ glitchtip_info.container.State.Status }} | Health: {{ glitchtip_info.container.State.Health.Status | default('N/A') }}"
+
+    - name: Exibir resumo final
+      debug:
+        msg:
+          - "============================================"
+          - "  GlitchTip provisionado com sucesso!"
+          - "============================================"
+          - "  URL interna : http://{{ glitchtip_container_name }}:8000 (warpgate)"
+          - "  Container   : {{ glitchtip_container_name }}"
+          - "============================================"
+          - "  Próximos passos:"
+          - "  1. Vhost público via setup_app.yml (ver header deste playbook)"
+          - "  2. Registrar admin + flip ENABLE_USER_REGISTRATION (README da role)"
+          - "  3. Criar org/projetos e copiar DSNs pros GitHub Environments"
+          - "  4. Monitor no Uptime Kuma: https://{{ glitchtip_domain }}/_health/"
+          - "============================================"

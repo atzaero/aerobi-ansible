@@ -124,6 +124,7 @@ docker exec postgres psql -U viki_user -d viki_assistant -c "SELECT current_user
 |---|---|---|---|
 | Viki Assistant | `viki_assistant` | `viki_user` | no Vault (`vault_viki_db_password`) |
 | Barber Shop | `barber_shop` | `barber_user` | no Vault (`vault_barber_db_password`) |
+| GlitchTip | `glitchtip` | `glitchtip_user` | no Vault (`vault_glitchtip_db_password`) |
 
 > Para ver a senha: `ansible-vault view inventory/prod/group_vars/all/vault.yml`
 
