@@ -36,6 +36,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 | 4000 | Evolution GO | `127.0.0.1` | Apenas via Nginx em `evolution.aerobi.com.br` (tailnet-only). Gateway WhatsApp consumido pela aerobi-api via rede `warpgate` em `evolution_go:4000` (epic #137). `SERVER_PORT` interno = 4000 |
 | 5432 | PostgreSQL 17 | `127.0.0.1` (apps) + `100.64.0.1` (tailnet via socat sidecar) | Apps via rede docker `warpgate`; admin via DBeaver direto em `100.64.0.1:5432` (sem SSH tunnel — issue #7 fechada via `roles/postgres_tailnet_proxy/`) |
 | 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |
+| 8000 | GlitchTip | `127.0.0.1` | Apenas via Nginx em `errors.aerobi.com.br` (**público** — SDKs Sentry enviam eventos do browser do usuário final direto pro DSN). Container único `all_in_one`; fila/cache no Postgres compartilhado (issue #27) |
 | 8080 | Headscale | `127.0.0.1` | Apenas via Nginx em `headscale.aerobi.com.br` |
 | 8083 | SFTP Go (web admin/API) | `127.0.0.1` | Apenas via Nginx em `sftp.aerobi.com.br` (tailnet-only). Porta 8080 do container é remapeada para 8083 no host porque 8080 já é do Headscale |
 | 2022 | SFTP Go (SFTP server) | `127.0.0.1` + `100.64.0.1` (tailnet via socat sidecar) | Clientes SFTP via tailnet em `100.64.0.1:2022` — `roles/sftpgo_tailnet_proxy/`, mesmo padrão do postgres |
