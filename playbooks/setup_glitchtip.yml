@@ -79,7 +79,10 @@
     - role: glitchtip
 
   post_tasks:
+    # no_log: Config.Env do resultado traz SECRET_KEY, DATABASE_URL e EMAIL_URL
+    # com senha — sem isso, rodar com -v despeja os segredos no log.
     - name: Verificar saúde do container
+      no_log: true
       community.docker.docker_container_info:
         name: "{{ glitchtip_container_name }}"
       register: glitchtip_info

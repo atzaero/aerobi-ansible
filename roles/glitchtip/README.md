@@ -24,7 +24,7 @@ eventos direto do navegador do usuário final para o DSN.
 | Variável | Default | Descrição |
 |---|---|---|
 | `glitchtip_image` | `glitchtip/glitchtip` | Imagem (Docker Hub). |
-| `glitchtip_version` | `6` | Tag pinada por major (releases em glitchtip.com/blog). |
+| `glitchtip_version` | `6.2.2` | Tag pinada (releases em glitchtip.com/blog). |
 | `glitchtip_container_name` | `glitchtip` | Nome/alias DNS na `warpgate`. |
 | `glitchtip_port` | `8000` | Porta no host (`127.0.0.1:<porta>:8000`); container escuta fixo em 8000. |
 | `glitchtip_uploads_volume` | `glitchtip_uploads` | Volume `/code/uploads` (sourcemaps/attachments). |

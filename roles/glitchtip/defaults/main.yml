@@ -11,10 +11,10 @@
 # tarefas de fila sob pressão de memória).
 # Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
 
-# Imagem pinada por major — bumpar revisando https://glitchtip.com/blog/
+# Imagem pinada — bumpar revisando https://glitchtip.com/blog/
 # Validar com `docker manifest inspect <imagem>:<tag>` antes de aplicar.
 glitchtip_image: glitchtip/glitchtip
-glitchtip_version: "6"
+glitchtip_version: "6.2.2"
 
 glitchtip_container_name: glitchtip
 
@@ -35,7 +35,7 @@ glitchtip_db_user: glitchtip_user
 glitchtip_domain: "errors.aerobi.com.br"
 
 # SMTP — Google Workspace, mesmo servidor do Vaultwarden (STARTTLS 587).
-# EMAIL_URL usa scheme submission:// (dj-email-url = SMTP com STARTTLS).
+# EMAIL_URL usa scheme smtp+tls:// (django-environ = SMTP com STARTTLS).
 glitchtip_smtp_host: "smtp.gmail.com"
 glitchtip_smtp_port: "587"
 glitchtip_smtp_username: "admin@aerobi.com.br"

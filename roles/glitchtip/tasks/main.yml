@@ -68,9 +68,11 @@
       # URL pública COM scheme — usada em links de e-mail e validação de origem.
       GLITCHTIP_DOMAIN: "https://{{ glitchtip_domain }}"
       DEFAULT_FROM_EMAIL: "{{ glitchtip_from_email }}"
-      # dj-email-url: submission:// = SMTP com STARTTLS (porta 587). urlencode
-      # escapa o '@' do username (%40) e caracteres especiais da senha.
-      EMAIL_URL: "submission://{{ glitchtip_smtp_username | urlencode }}:{{ glitchtip_smtp_password | urlencode }}@{{ glitchtip_smtp_host }}:{{ glitchtip_smtp_port }}"
+      # django-environ (email_url): smtp+tls:// = SMTP com STARTTLS (porta 587).
+      # "submission://" NÃO existe nos EMAIL_SCHEMES do django-environ e derruba
+      # o settings.py no boot (infra-review #27). urlencode escapa o '@' do
+      # username (%40) e caracteres especiais da senha.
+      EMAIL_URL: "smtp+tls://{{ glitchtip_smtp_username | urlencode }}:{{ glitchtip_smtp_password | urlencode }}@{{ glitchtip_smtp_host }}:{{ glitchtip_smtp_port }}"
       # Hardening / features — | string: docker_container exige env como string;
       # sem o filtro o jinja2 native preserva int/bool e o módulo rejeita.
       ENABLE_USER_REGISTRATION: "{{ glitchtip_enable_user_registration | string }}"
