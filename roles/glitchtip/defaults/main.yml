@@ -1,0 +1,71 @@
+---
+# Defaults: glitchtip
+#
+# Error tracking self-hosted compatível com SDKs Sentry (issue #27), consumido
+# pela aerobi-api (atzaero/aerobi-api#131) e aerobi-web (atzaero/aerobi#1239).
+#
+# GlitchTip 6 roda em container ÚNICO (SERVER_ROLE=all_in_one: web + worker
+# django-vtasks + migrações no boot). Fila e cache vivem no PRÓPRIO Postgres
+# (VALKEY_URL vazio) — volume de eventos baixo; se crescer, migrar para um
+# Valkey DEDICADO com noeviction (o compartilhado usa allkeys-lru, que evicta
+# tarefas de fila sob pressão de memória).
+# Sobrescreva em inventory/prod/group_vars/all/all.yml conforme necessário.
+
+# Imagem pinada por major — bumpar revisando https://glitchtip.com/blog/
+# Validar com `docker manifest inspect <imagem>:<tag>` antes de aplicar.
+glitchtip_image: glitchtip/glitchtip
+glitchtip_version: "6"
+
+glitchtip_container_name: glitchtip
+
+# Porta no HOST (bind 127.0.0.1). O container escuta fixo em 8000 (env PORT) —
+# o mapeamento é 127.0.0.1:<glitchtip_port>:8000. Exposição via nginx
+# (setup_app.yml, vhost PÚBLICO): o SDK do browser (aerobi-web) envia eventos
+# direto do navegador do usuário final para o DSN.
+glitchtip_port: 8000
+
+# Volume de uploads (artefatos de release / sourcemaps / attachments).
+glitchtip_uploads_volume: glitchtip_uploads
+
+# Banco PostgreSQL compartilhado (deve casar com postgres_apps no inventory).
+glitchtip_db: glitchtip
+glitchtip_db_user: glitchtip_user
+
+# Domínio público. GLITCHTIP_DOMAIN exige scheme — a role monta https://<domínio>.
+glitchtip_domain: "errors.aerobi.com.br"
+
+# SMTP — Google Workspace, mesmo servidor do Vaultwarden (STARTTLS 587).
+# EMAIL_URL usa scheme submission:// (dj-email-url = SMTP com STARTTLS).
+glitchtip_smtp_host: "smtp.gmail.com"
+glitchtip_smtp_port: "587"
+glitchtip_smtp_username: "admin@aerobi.com.br"
+glitchtip_from_email: "admin@aerobi.com.br"
+
+# Registro de usuários: "True" APENAS até o admin se registrar (primeiro acesso).
+# Depois: flip para "False" no inventory e re-aplicar — o docker_container
+# detecta o drift de env e recria o container. Runbook no README da role.
+glitchtip_enable_user_registration: "True"
+# Criação de orgs restrita a superusers (default upstream já é False; explícito).
+glitchtip_enable_organization_creation: "False"
+
+# Retenção de eventos em dias (env GLITCHTIP_RETENTION_DAYS; default upstream 90).
+glitchtip_retention_days: 90
+
+# Features desligadas — economia de RAM e de conexões no Postgres compartilhado:
+glitchtip_enable_uptime: "False"    # Uptime Kuma já cobre uptime monitoring
+glitchtip_enable_logs: "False"      # ingestão de logs fora de escopo (só errors)
+glitchtip_enable_admin: "False"     # /admin do Django
+glitchtip_enable_openapi: "False"   # /api/docs
+
+# Concorrência do worker vtasks (asyncio; default upstream 20). Reduzido para
+# poupar conexões no Postgres compartilhado (postgres_max_connections=100).
+glitchtip_vtasks_concurrency: "10"
+
+# Segredos — definidos no vault per-value; default 'changeme' dispara fail-fast.
+#   glitchtip_db_password   <- vault_glitchtip_db_password  (openssl rand -hex 32)
+#   glitchtip_secret_key    <- vault_glitchtip_secret_key   (openssl rand -hex 32)
+#   glitchtip_smtp_password <- vault_glitchtip_smtp_password (Gmail app password,
+#                              SEM espaços — o Google exibe com espaços)
+glitchtip_db_password: "changeme"
+glitchtip_secret_key: "changeme"
+glitchtip_smtp_password: "changeme"
