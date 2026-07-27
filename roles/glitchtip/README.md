@@ -65,6 +65,13 @@ eventos direto do navegador do usuário final para o DSN.
   validando com `docker manifest inspect glitchtip/glitchtip:<tag>`.
 - **Conexões no PG**: medir após deploy com
   `docker exec postgres psql -U postgres -c "select usename, count(*) from pg_stat_activity group by 1;"`.
+- **Log do Postgres** (issue #163): o worker de fila (`gt_rust`) emite
+  `COMMIT`/`ROLLBACK` sem transação ~1x/s no polling, o que inundaria o log com
+  `WARNING: there is no transaction in progress` (~107k linhas/dia). A role
+  aplica `ALTER ROLE glitchtip_user SET log_min_messages = 'error'`
+  (idempotente; handler reinicia o container para o pool reconectar) — silencia
+  **só essa role**, warnings dos demais bancos continuam. Reverter:
+  `ALTER ROLE glitchtip_user RESET log_min_messages`.
 
 ## Primeiro acesso (runbook)
 

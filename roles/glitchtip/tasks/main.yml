@@ -43,6 +43,40 @@
   when: glitchtip_smtp_password | default('') in ['changeme', '', None]
 
 # ----------------------------------------------------------------
+# Log do Postgres — silenciar polling do gt_rust (issue #163)
+# ----------------------------------------------------------------
+
+# O worker de fila do GlitchTip (application_name gt_rust:default) emite
+# COMMIT/ROLLBACK sem transação aberta ~1x/s no polling, gerando
+# "WARNING: there is no transaction in progress" no log do Postgres
+# compartilhado (~107k linhas/dia medidos em prod). Suprime mensagens
+# abaixo de ERROR só para a role do GlitchTip — warnings das demais
+# roles/bancos continuam no log. setdatabase = 0 restringe a consulta ao
+# escopo por-role, o mesmo que o ALTER ROLE ... SET grava.
+
+- name: Verificar log_min_messages da role {{ glitchtip_db_user }}
+  shell: |
+    docker exec {{ postgres_container_name }} \
+      psql -U {{ postgres_user }} -d {{ postgres_db }} -tAc \
+      "SELECT COALESCE((SELECT array_to_string(setconfig, ',')
+         FROM pg_db_role_setting s
+         JOIN pg_roles r ON r.oid = s.setrole
+         WHERE s.setdatabase = 0 AND r.rolname = '{{ glitchtip_db_user }}'), '')"
+  register: _glitchtip_role_config
+  changed_when: false
+
+- name: Silenciar WARNINGs do gt_rust no log do Postgres
+  shell: |
+    docker exec {{ postgres_container_name }} \
+      psql -U {{ postgres_user }} -d {{ postgres_db }} \
+      -c "ALTER ROLE {{ glitchtip_db_user }} SET log_min_messages = 'error'"
+  when: "'log_min_messages=error' not in _glitchtip_role_config.stdout"
+  # Config por-role só vale para conexões NOVAS — o handler reinicia o
+  # GlitchTip para o pool do gt_rust reconectar. No 1º provisionamento isso
+  # gera um restart extra ao fim do play, inócuo.
+  notify: Reiniciar GlitchTip
+
+# ----------------------------------------------------------------
 # Container
 # ----------------------------------------------------------------
 
