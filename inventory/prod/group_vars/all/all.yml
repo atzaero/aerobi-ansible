@@ -403,8 +403,9 @@ glitchtip_db_user: glitchtip_user
 glitchtip_db_password: "{{ vault_glitchtip_db_password }}"
 glitchtip_secret_key: "{{ vault_glitchtip_secret_key }}"
 glitchtip_smtp_password: "{{ vault_glitchtip_smtp_password }}"
-# "True" só até o admin se registrar — depois flip para "False" + re-apply.
-glitchtip_enable_user_registration: "True"
+# Registro fechado em 2026-07-27 após o admin se registrar (runbook issue #27).
+# Convites de novos usuários: pela UI (org settings → members), via e-mail.
+glitchtip_enable_user_registration: "False"
 
 # ------------------------------------------------------------
 # Staging — ambiente de homologação co-localizado na MESMA VPS
