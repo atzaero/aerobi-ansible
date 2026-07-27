@@ -1,0 +1,8 @@
+---
+# Handlers: glitchtip
+
+# Força o pool do gt_rust a reconectar após mudança de config por-role no
+# Postgres (log_min_messages, issue #163). Roda ao fim do play — o container
+# já existe nesse ponto, mesmo no 1º provisionamento.
+- name: Reiniciar GlitchTip
+  command: docker restart {{ glitchtip_container_name }}
