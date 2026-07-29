@@ -18,6 +18,7 @@ Antes de entrar em pânico, descarte o mundano **nesta ordem**:
 
 - **DNS apontando para lugar errado (sem expiração)?** — `dig +short aerobi.com.br` (e subdomínios) contra múltiplos resolvers (`8.8.8.8`, `1.1.1.1`, `9.9.9.9`). Compare com o que está cadastrado no painel Registro.br.
 - **Container unhealthy mas servindo?** — `docker inspect <name> --format='{{.State.Health.Status}}'` vs `curl localhost:<porta>/`. Se app responde 200 mas healthcheck falha, provavelmente healthcheck quebrado (porta errada, URL que não existe).
+- **Container morreu e religou sozinho?** — crash + `restart: unless-stopped` é invisível para monitor HTTP (downtime de segundos). O projeto **infra** no GlitchTip (errors.aerobi.com.br) recebe um evento por `die` com exit != 0 e por OOM-kill (role `docker_events_alerter`). Conferir também `docker inspect <name> --format='{{.RestartCount}} {{.State.StartedAt}}'` e `journalctl -u docker-events-alerter -n 20`.
 - **403 "estranho" do navegador** — verifique o header `Server:` via `curl -sI <url> | grep -i server`. `Server: nginx` é seu; outro pode ser CDN/parking/outro provider onde DNS aponta.
 - **403 em endpoint admin (s3-console, status, /admin do vaultwarden)** — você está sem tailscale. Esses endpoints são tailnet-only por design. `tailscale up` resolve.
 - **Processo suspeito** — pode ser parte normal do sistema (systemd, docker, containers). `ps auxf` mostra a árvore; busque por processo pai.
@@ -224,6 +225,7 @@ Depois de tudo reconstruído:
 - [ ] NOPASSWD deploy via sudoers.d
 - [ ] Automatic security updates (`unattended-upgrades`)
 - [ ] **Uptime Kuma com Domain Name Expiry monitor** para `aerobi.com.br`
+- [ ] **docker-events-alerter ativo** (`systemctl status docker-events-alerter`) — crash/OOM de container vira evento no projeto infra do GlitchTip
 - [ ] Backup automatizado agendado (issue futura — para `aerobi-prod-backups` no MinIO)
 - [ ] SSH keys com passphrase — NÃO deixar chaves raw no disco
 - [ ] Endpoints admin tailnet-only (`s3-console`, `status`, `/admin`)
