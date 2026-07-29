@@ -1,0 +1,73 @@
+---
+# Role: docker_events_alerter
+#
+# Instala um serviço systemd que escuta `docker events` (die com exit != 0 e
+# oom) e envia um evento para o GlitchTip via store API — cobre o ponto cego
+# de crash + restart automático rápido (atzaero/aerobi-api#621).
+#
+# SEGURANÇA:
+#   - O DSN embute a secret key do projeto → env file root:root 0600 e
+#     no_log nas tasks que o manipulam
+#   - Roda como root (precisa do docker.sock), mas só LÊ eventos e faz POST
+#     HTTPS de saída — sem porta aberta, sem estado além do rate-limit em /run
+#
+# PRÉ-REQUISITOS:
+#   - Docker instalado (role docker)
+#   - Projeto dedicado no GlitchTip com DSN no vault (README.md desta role)
+
+- name: Validar DSN do GlitchTip
+  fail:
+    msg: >
+      docker_events_alerter_dsn vazio ou 'changeme'
+      (verifique vault_docker_events_alerter_dsn no vault). Crie o projeto
+      "infra" no GlitchTip e configure antes de aplicar — runbook em
+      roles/docker_events_alerter/README.md.
+  when: docker_events_alerter_dsn | default('') in ['changeme', '', None]
+
+# jq parseia o JSON de `docker events`; curl faz o POST. Docker vem da role
+# docker (pré-requisito).
+- name: Garantir dependências do watcher (jq, curl)
+  ansible.builtin.apt:
+    name:
+      - jq
+      - curl
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Instalar env file com o DSN
+  no_log: true
+  ansible.builtin.template:
+    src: docker-events-alerter.env.j2
+    dest: "{{ docker_events_alerter_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart docker-events-alerter
+
+- name: Instalar script do watcher
+  ansible.builtin.template:
+    src: docker-events-alerter.sh.j2
+    dest: "{{ docker_events_alerter_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart docker-events-alerter
+
+- name: Instalar systemd unit
+  ansible.builtin.template:
+    src: docker-events-alerter.service.j2
+    dest: "/etc/systemd/system/{{ docker_events_alerter_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart docker-events-alerter
+
+- name: Habilitar e iniciar o watcher
+  ansible.builtin.systemd:
+    name: "{{ docker_events_alerter_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true

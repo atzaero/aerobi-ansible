@@ -1,0 +1,33 @@
+---
+# Defaults: docker_events_alerter
+#
+# Watcher de `docker events` (die/oom) que envia evento ao GlitchTip
+# (atzaero/aerobi-ansible#165, incidente atzaero/aerobi-api#621): crash de
+# container com restart automático em segundos é invisível para o Uptime Kuma
+# (monitores HTTP) e para o SDK in-process (OOM fatal aborta o processo sem
+# lançar erro JS). O watcher observa o daemon Docker de fora e alerta pelo
+# canal que já manda email — o próprio GlitchTip.
+#
+# Requer um projeto DEDICADO no GlitchTip (sugestão: "infra" na org aerobi) —
+# não reusar o DSN dos apps: o rótulo do projeto é o que separa "erro de
+# aplicação" de "container morreu". DSN no vault
+# (vault_docker_events_alerter_dsn); runbook em README.md desta role.
+
+docker_events_alerter_service_name: docker-events-alerter
+docker_events_alerter_script_path: /usr/local/bin/docker-events-alerter.sh
+# Contém o DSN (secret key embutida) — instalado root:root 0600.
+docker_events_alerter_env_file: /etc/docker-events-alerter.env
+
+# DSN do projeto infra no GlitchTip (https://KEY@errors.aerobi.com.br/N).
+# Sobrescrever via inventory: "{{ vault_docker_events_alerter_dsn }}".
+docker_events_alerter_dsn: "changeme"
+
+# `environment` carimbado nos eventos enviados (a VPS de prod hospeda staging
+# junto — o nome do container no evento diz qual app morreu; este campo diz
+# qual HOST observou).
+docker_events_alerter_environment: "prod"
+
+# Rate-limit por container: um crash-loop (restart: unless-stopped religa em
+# segundos) geraria dezenas de eventos por minuto; 1 evento/intervalo basta —
+# o GlitchTip agrupa por fingerprint (container) e conta as ocorrências.
+docker_events_alerter_min_interval_seconds: 60

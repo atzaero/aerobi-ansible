@@ -1,0 +1,70 @@
+---
+# Playbook: setup_docker_events_alerter.yml
+#
+# Instala o watcher de docker events (die/oom → evento no GlitchTip) na VPS
+# (atzaero/aerobi-ansible#165, incidente atzaero/aerobi-api#621). Crash de
+# container com restart automático em segundos é invisível para o Uptime Kuma
+# (HTTP) e para o SDK in-process (OOM fatal não lança erro JS) — o watcher
+# observa o daemon Docker de fora e alerta pelo GlitchTip, que já manda email.
+#
+# PRÉ-REQUISITOS:
+#   1. setup_vps.yml executado (Docker rodando)
+#   2. setup_glitchtip.yml executado (errors.aerobi.com.br no ar)
+#   3. Projeto "infra" criado na org aerobi do GlitchTip (UI) com alert rule
+#      de email — runbook em roles/docker_events_alerter/README.md
+#   4. Vault configurado:
+#        vault_docker_events_alerter_dsn — DSN do projeto infra
+#
+# Uso:
+#   ansible-playbook -i inventory/prod playbooks/setup_docker_events_alerter.yml
+#
+# SMOKE TEST (após aplicar — ver README da role):
+#   docker run --rm --name alerter-smoke-test alpine:3 sh -c 'exit 42'
+#   → evento no projeto infra em <1min
+
+- name: Provisionar watcher de docker events → GlitchTip
+  hosts: all
+  become: yes
+
+  pre_tasks:
+    - name: Validar variáveis obrigatórias
+      fail:
+        msg: >
+          A variável '{{ item }}' é obrigatória.
+          Adicione ao vault: ansible-vault edit inventory/prod/group_vars/all/vault.yml
+      when: vars[item] | default('') in ['', 'changeme']
+      loop:
+        - docker_events_alerter_dsn
+
+    - name: Exibir configuração que será aplicada
+      debug:
+        msg:
+          - "============================================"
+          - "  Provisionando docker-events-alerter"
+          - "============================================"
+          - "  Serviço     : {{ docker_events_alerter_service_name }} (systemd)"
+          - "  Filtros     : die (exit != 0) + oom"
+          - "  Destino     : GlitchTip (projeto infra)"
+          - "  Environment : {{ docker_events_alerter_environment }}"
+          - "  Rate-limit  : {{ docker_events_alerter_min_interval_seconds }}s por container"
+          - "============================================"
+
+  roles:
+    - role: docker_events_alerter
+
+  post_tasks:
+    - name: Verificar estado do serviço
+      ansible.builtin.systemd:
+        name: "{{ docker_events_alerter_service_name }}"
+      register: alerter_service
+
+    - name: Exibir resumo final
+      debug:
+        msg:
+          - "============================================"
+          - "  docker-events-alerter provisionado!"
+          - "============================================"
+          - "  Estado: {{ alerter_service.status.ActiveState }}"
+          - "  Logs  : journalctl -u {{ docker_events_alerter_service_name }} -f"
+          - "  Smoke : docker run --rm alpine:3 sh -c 'exit 42'"
+          - "============================================"

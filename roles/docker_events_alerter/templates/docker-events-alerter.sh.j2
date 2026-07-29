@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+{{ ansible_managed | comment(decoration='# ') }}
+#
+# Escuta `docker events` (die/oom) e envia um evento por crash ao GlitchTip
+# via store API (Sentry-compatible). Contexto: atzaero/aerobi-api#621 —
+# container que morre e religa em segundos é invisível para monitores HTTP.
+#
+# - `die` com exit 0 é parada limpa (deploy, docker stop) → ignorado.
+# - `oom` é o OOM-kill do cgroup (sem exitCode) → sempre alerta.
+# - Rate-limit por container em /run (tmpfs): crash-loop vira 1 evento por
+#   intervalo; o agrupamento/contagem fica no GlitchTip (fingerprint).
+#
+# GLITCHTIP_DSN vem do EnvironmentFile do systemd (root:root 0600).
+
+set -u
+
+DSN="${GLITCHTIP_DSN:?GLITCHTIP_DSN ausente (EnvironmentFile do systemd)}"
+
+# DSN https://KEY@HOST/PROJECT → store URL https://HOST/api/PROJECT/store/
+proto="${DSN%%://*}"
+rest="${DSN#*://}"
+key="${rest%%@*}"
+host_proj="${rest#*@}"
+host="${host_proj%%/*}"
+project="${host_proj##*/}"
+store_url="${proto}://${host}/api/${project}/store/"
+
+min_interval={{ docker_events_alerter_min_interval_seconds }}
+environment="{{ docker_events_alerter_environment }}"
+state_dir=/run/docker-events-alerter
+mkdir -p "$state_dir"
+server_name="$(hostname)"
+
+docker events \
+  --filter event=die \
+  --filter event=oom \
+  --format '{% raw %}{{json .}}{% endraw %}' |
+while IFS= read -r line; do
+  action=$(jq -r '.Action // .status // "unknown"' <<<"$line")
+  name=$(jq -r '.Actor.Attributes.name // "unknown"' <<<"$line")
+  exit_code=$(jq -r '.Actor.Attributes.exitCode // ""' <<<"$line")
+  image=$(jq -r '.Actor.Attributes.image // ""' <<<"$line")
+
+  if [ "$action" = "die" ] && [ "${exit_code:-0}" = "0" ]; then
+    continue
+  fi
+
+  now=$(date +%s)
+  state_file="${state_dir}/${name}"
+  last=$(cat "$state_file" 2>/dev/null || echo 0)
+  if [ $((now - last)) -lt "$min_interval" ]; then
+    continue
+  fi
+  echo "$now" >"$state_file"
+
+  event_id=$(tr -d '-' </proc/sys/kernel/random/uuid)
+  timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if [ "$action" = "oom" ]; then
+    message="Container ${name} sofreu OOM-kill do cgroup"
+  else
+    message="Container ${name} morreu (exit=${exit_code})"
+  fi
+
+  payload=$(jq -n \
+    --arg event_id "$event_id" \
+    --arg ts "$timestamp" \
+    --arg msg "$message" \
+    --arg name "$name" \
+    --arg image "$image" \
+    --arg exit_code "${exit_code:-n/a}" \
+    --arg action "$action" \
+    --arg env "$environment" \
+    --arg host "$server_name" \
+    '{
+      event_id: $event_id,
+      timestamp: $ts,
+      platform: "other",
+      level: "error",
+      logger: "docker-events-alerter",
+      environment: $env,
+      server_name: $host,
+      message: $msg,
+      fingerprint: ["docker-events-alerter", $name],
+      tags: { container: $name, action: $action, exit_code: $exit_code },
+      extra: { image: $image }
+    }')
+
+  if curl -sS -m 10 -o /dev/null \
+    -H "Content-Type: application/json" \
+    -H "X-Sentry-Auth: Sentry sentry_version=7, sentry_client=docker-events-alerter/1.0, sentry_key=${key}" \
+    -d "$payload" "$store_url"; then
+    echo "evento enviado: container=${name} action=${action} exit=${exit_code:-n/a}"
+  else
+    echo "ERRO ao enviar evento p/ GlitchTip: container=${name} action=${action}" >&2
+  fi
+done
+
+# `docker events` só encerra se o daemon cair/reiniciar — deixa o systemd
+# (Restart=always) religar o watcher e reabrir o stream.
+echo "stream de docker events encerrou; saindo p/ o systemd reiniciar" >&2
+exit 1

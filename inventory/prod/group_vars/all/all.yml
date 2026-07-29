@@ -408,6 +408,20 @@ glitchtip_smtp_password: "{{ vault_glitchtip_smtp_password }}"
 glitchtip_enable_user_registration: "False"
 
 # ------------------------------------------------------------
+# Docker events alerter — crash/OOM de container → GlitchTip (issue #165)
+# ------------------------------------------------------------
+# Watcher systemd que escuta docker events (die exit != 0 / oom) e envia
+# evento ao projeto "infra" do GlitchTip. Cobre o ponto cego de crash com
+# restart automático rápido (incidente atzaero/aerobi-api#621).
+#
+# Vault — adicione antes de aplicar setup_docker_events_alerter.yml
+# (DSN do projeto infra, criado na UI — runbook na README da role):
+#   ansible-vault encrypt_string --stdin-name 'vault_docker_events_alerter_dsn' \
+#     --vault-password-file .vault_pass
+#
+docker_events_alerter_dsn: "{{ vault_docker_events_alerter_dsn }}"
+
+# ------------------------------------------------------------
 # Staging — ambiente de homologação co-localizado na MESMA VPS
 # ------------------------------------------------------------
 # Roda lado a lado com produção: mesmo host, mesmo cluster PostgreSQL,

@@ -1,0 +1,27 @@
+{{ ansible_managed | comment(decoration='# ') }}
+
+[Unit]
+Description=Aerobi docker events alerter (die/oom -> GlitchTip)
+Documentation=https://github.com/atzaero/aerobi-ansible/tree/main/roles/docker_events_alerter
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Root: leitura do docker.sock. O script só consome eventos e faz POST de
+# saída — nenhuma porta aberta.
+EnvironmentFile={{ docker_events_alerter_env_file }}
+ExecStart={{ docker_events_alerter_script_path }}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
