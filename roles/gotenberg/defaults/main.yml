@@ -1,0 +1,52 @@
+---
+# Defaults: gotenberg
+#
+# Sobrescreva em inventory/<env>/group_vars/all/all.yml conforme necessário.
+
+# ------------------------------------------------------------
+# Imagem e container
+# ------------------------------------------------------------
+# Pin explícito pra reprodutibilidade. Atualizar manualmente após revisar
+# changelog: https://github.com/gotenberg/gotenberg/releases
+# IMPORTANTE: validar com `docker manifest inspect gotenberg/gotenberg:<tag>`
+# antes de pinar (releases podem ser removidas do registry).
+gotenberg_image: gotenberg/gotenberg
+gotenberg_version: "8.34.0"
+gotenberg_container_name: gotenberg
+
+# ------------------------------------------------------------
+# Rede
+# ------------------------------------------------------------
+# NENHUMA porta publicada no host — as aerobi-api (staging e prod) consomem
+# via rede warpgate em http://gotenberg:3000. A porta 3000 aqui é INTERNA ao
+# container (--api-port default do Gotenberg); não colide com a 3000 do host
+# (aerobi-web).
+docker_network_name: warpgate
+gotenberg_port: 3000
+
+# ------------------------------------------------------------
+# Recursos (Chromium)
+# ------------------------------------------------------------
+# /dev/shm: o default de 64 MB do Docker derruba o Chromium em páginas
+# não-triviais ("session deleted because of page crash").
+gotenberg_shm_size: "512M"
+
+# Teto de RAM do container — primeiro limite de memória do repo, de propósito:
+# Chromium sob carga é o único serviço com risco real de estourar a RAM da
+# VPS. Justificativa completa no README da role.
+gotenberg_memory_limit: "1g"
+
+# ------------------------------------------------------------
+# Flags de proteção (command line do container)
+# ------------------------------------------------------------
+# --api-timeout: aborta conversões penduradas (30s já é o default do
+#   Gotenberg; explícito pra ficar declarado/diffável).
+# --chromium-max-queue-size: default 0 = fila ilimitada; 10 devolve 503
+#   rápido sob sobrecarga em vez de acumular requests até estourar memória.
+# --chromium-deny-private-ips: bloqueia o Chromium de buscar recursos em IPs
+#   privados — mitiga SSRF contra serviços internos da warpgate (Headscale é
+#   crown jewel — docs/SECURITY.md). Consequência: templates HTML não podem
+#   referenciar assets em hosts internos (embutir base64 ou usar URL pública).
+gotenberg_api_timeout: "30s"
+gotenberg_chromium_max_queue_size: 10
+gotenberg_chromium_deny_private_ips: "true"

@@ -1,0 +1,61 @@
+---
+# Role: gotenberg
+#
+# Sobe o Gotenberg (API HTTP stateless de conversão HTML→PDF via Chromium)
+# em container Docker na rede warpgate. Serviço interno — NENHUMA porta
+# publicada no host: as aerobi-api de staging e prod consomem via
+# http://gotenberg:3000 (instância única — decisão registrada no README).
+#
+# Pré-requisitos:
+#   - Docker instalado (role: docker)
+#   - Rede Docker `warpgate` criada (role: docker_network)
+#
+# Segurança:
+#   - Sem secrets — a API do Gotenberg não tem autenticação e só é
+#     alcançável de dentro da rede warpgate (nenhuma porta no host)
+#   - no-new-privileges; imagem roda não-root nativo (gotenberg, 1001:1001)
+
+- name: Validar pin da imagem do Gotenberg
+  fail:
+    msg: >
+      gotenberg_version precisa ser uma tag pinada (não 'latest' nem vazia).
+      Revise https://github.com/gotenberg/gotenberg/releases e valide com
+      `docker manifest inspect` antes de bumpar.
+  when: gotenberg_version | default('') in ['latest', '', None]
+
+- name: Subir container Gotenberg {{ gotenberg_version }}
+  community.docker.docker_container:
+    name: "{{ gotenberg_container_name }}"
+    image: "{{ gotenberg_image }}:{{ gotenberg_version }}"
+    state: started
+    restart_policy: unless-stopped
+    # SEM ports: — nada publicado no host (nem 127.0.0.1). Apps alcançam
+    # pelo alias DNS da rede warpgate: http://gotenberg:3000.
+    # Chromium crasha com o /dev/shm default de 64 MB do Docker.
+    shm_size: "{{ gotenberg_shm_size }}"
+    # Único serviço do repo com teto de RAM — Chromium sob carga é o único
+    # com risco real de estourar a memória da VPS (ver README da role).
+    memory: "{{ gotenberg_memory_limit }}"
+    # deny-private-ips: Chromium renderiza HTML arbitrário — sem isso, um
+    # template comprometido vira proxy de SSRF contra a warpgate (Headscale).
+    command: >-
+      gotenberg
+      --api-timeout={{ gotenberg_api_timeout }}
+      --chromium-max-queue-size={{ gotenberg_chromium_max_queue_size }}
+      --chromium-deny-private-ips={{ gotenberg_chromium_deny_private_ips }}
+    networks:
+      - name: "{{ docker_network_name }}"
+    # Sem user: explícito — a imagem já roda não-root nativo (gotenberg,
+    # 1001:1001) e não há volume no host pra alinhar ownership (stateless).
+    security_opts:
+      - "no-new-privileges:true"
+    healthcheck:
+      # GET /health nativo (200 up / 503 down). Imagem tem curl em
+      # /usr/bin/curl (validado em 2026-07-30 na 8.34.0 via
+      # `docker run --entrypoint /bin/sh ... -c 'command -v curl wget nc'`
+      # → só curl; wget/nc ausentes — regra 4 do AGENTS.md).
+      test: ["CMD", "curl", "--silent", "--fail", "http://localhost:{{ gotenberg_port }}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

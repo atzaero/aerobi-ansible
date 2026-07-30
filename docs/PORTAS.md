@@ -28,6 +28,7 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 | Porta | Serviço | Bind | Acesso |
 |---|---|---|---|
 | 3000 | aerobi-web | `127.0.0.1` | Apenas via Nginx em `aerobi.com.br` + `www` (Next.js, frontend AEROMAP-BI; cert SAN apex+www via `vhost_server_aliases`) |
+| 3000 (só no container) | Gotenberg | — (nenhuma porta publicada no host) | Apps via rede docker `warpgate` em `gotenberg:3000` (HTML→PDF via Chromium, instância única staging+prod; sem vhost). Não colide com a 3000 do host acima — é porta interna do container (issue #168) |
 | 3001 | Uptime Kuma | `127.0.0.1` | Apenas via Nginx em `status.aerobi.com.br` (tailnet-only) |
 | 3010 | Vaultwarden | `127.0.0.1` | Apenas via Nginx em `vault.aerobi.com.br` (`/admin` tailnet-only) |
 | 3100 | aerobi-web-staging | `127.0.0.1` | Apenas via Nginx em `staging.aerobi.com.br` (frontend de staging; `setup_staging.yml`) |

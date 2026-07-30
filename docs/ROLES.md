@@ -225,3 +225,23 @@ Permite que clientes SFTP na tailnet conectem direto via `sftp -P 2022 <user>@10
 - VPS conectada à tailnet (role `tailscale_client`)
 - `ufw_allow_tailscale_interface: true` (já default em prod)
 
+---
+
+## gotenberg
+
+**Tag:** `gotenberg`
+
+**O que faz:**
+- Sobe `gotenberg/gotenberg:8.34.0` (API HTTP stateless de conversão HTML→PDF via Chromium) na rede `warpgate`
+- **Nenhuma porta publicada no host** — as `aerobi-api` (staging e prod) consomem via `http://gotenberg:3000` (porta interna do container)
+- `shm_size: 512M` (o `/dev/shm` default de 64 MB do Docker derruba o Chromium) e `memory: 1g` (único teto de RAM do repo — justificativa em `roles/gotenberg/README.md`)
+- Flags de proteção: `--api-timeout=30s`, `--chromium-max-queue-size=10` (devolve 503 rápido sob sobrecarga em vez de enfileirar sem limite) e `--chromium-deny-private-ips=true` (anti-SSRF: o Chromium não alcança IPs privados — templates não podem referenciar assets de hosts internos)
+- Healthcheck nativo `GET /health` via `curl --fail` (regra 4: `curl` validado presente na imagem; `wget`/`nc` ausentes)
+
+**Por que importa:**
+Motor de geração de PDF da `aerobi-api` (export de visitas técnicas e relatórios futuros com identidade visual). Instância **única** serve staging + prod — o serviço não persiste nada; os templates HTML por ambiente vivem na `aerobi-api`.
+
+**Pré-requisitos:**
+- Docker + rede `warpgate` (roles `docker`, `docker_network`)
+- Nenhum secret no vault (API sem autenticação, alcançável só pela rede `warpgate`)
+
