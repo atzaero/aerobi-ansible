@@ -10,6 +10,7 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 - **Cofre de senhas**: Vaultwarden (backend Bitwarden) com `/admin` restrito à tailnet.
 - **Object storage**: MinIO S3-compatible com buckets declarativos. Console admin tailnet-only.
 - **Cache + filas**: Valkey (fork OSS do Redis) na rede docker.
+- **HTML→PDF**: Gotenberg (API stateless via Chromium) na rede docker, consumido pela `aerobi-api` (instância única staging+prod).
 - **Status + monitoring**: Uptime Kuma com Domain Name Expiry, HTTP/TCP/TLS monitors. Vhost tailnet-only.
 - **Streaming RTSP→HLS**: MediaMTX no edge node de aeródromo, fan-out de câmeras IP.
 
@@ -35,6 +36,7 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `sftpgo` | Servidor SFTP em Go com web admin (SQLite, tailnet-only) | `roles/sftpgo/README.md` |
 | `sftpgo_tailnet_proxy` | Sidecar socat — expõe SFTP em `100.64.0.1:2022` via tailnet | |
 | `glitchtip` | Error tracking self-hosted compatível com SDKs Sentry (público) | `roles/glitchtip/README.md` |
+| `gotenberg` | HTML→PDF via Chromium (API stateless interna, staging+prod) | `roles/gotenberg/README.md` |
 | `mediamtx` | RTSP→HLS fan-out (câmeras IP, edge) | |
 | `aerodrome_edge` | Raspberry Pi como subnet router Tailscale | |
 
@@ -52,6 +54,7 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `setup_uptime_kuma.yml` | docker_network → uptime_kuma | Monitoring (vhost via setup_app.yml) |
 | `setup_sftpgo.yml` | docker_network → sftpgo → sftpgo_tailnet_proxy | Servidor SFTP (vhost via setup_app.yml, tailnet-only) |
 | `setup_glitchtip.yml` | postgres_databases → glitchtip | Error tracking (vhost público via setup_app.yml) |
+| `setup_gotenberg.yml` | docker_network → gotenberg | HTML→PDF interno (sem vhost, sem porta no host) |
 | `setup_app.yml` | nginx_vhost (parametrizado) | Vhost + cert para qualquer app |
 | `setup_aerodrome.yml` | aerodrome_edge (Raspi) | Edge subnet router + mediamtx |
 
@@ -104,14 +107,15 @@ ansible-playbook playbooks/setup_database.yml
 ansible-playbook playbooks/setup_app_databases.yml
 # 3. Mesh VPN
 ansible-playbook playbooks/setup_headscale.yml
-# 4-8. Serviços
+# 4-9. Serviços
 ansible-playbook playbooks/setup_vaultwarden.yml
 ansible-playbook playbooks/setup_valkey.yml
 ansible-playbook playbooks/setup_minio.yml
 ansible-playbook playbooks/setup_uptime_kuma.yml
 ansible-playbook playbooks/setup_sftpgo.yml
 ansible-playbook playbooks/setup_glitchtip.yml
-# 9. Vhosts admin-only / públicos
+ansible-playbook playbooks/setup_gotenberg.yml
+# 10. Vhosts admin-only / públicos
 ansible-playbook playbooks/setup_app.yml -e "app_name=... app_domain=... app_port=..."
 ```
 

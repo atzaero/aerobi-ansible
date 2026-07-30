@@ -422,6 +422,25 @@ glitchtip_enable_user_registration: "False"
 docker_events_alerter_dsn: "{{ vault_docker_events_alerter_dsn }}"
 
 # ------------------------------------------------------------
+# Gotenberg — HTML → PDF via Chromium (issue #168)
+# ------------------------------------------------------------
+# API HTTP stateless consumida pelas aerobi-api de staging E prod via rede
+# warpgate (http://gotenberg:3000). Instância ÚNICA para os dois ambientes —
+# o Gotenberg não persiste nada; os templates HTML (que variam por ambiente)
+# vivem na aerobi-api. Decisão registrada em roles/gotenberg/README.md.
+#
+# NENHUMA porta publicada no host, sem vhost/DNS e sem secret no vault.
+#
+# Após merge + playbook, criar o secret consumido pela aerobi-api (mesma URL
+# p/ staging e prod; se o deploy usar GitHub Environments, criar em ambos):
+#   gh secret set GOTENBERG_URL --repo atzaero/aerobi-api --body "http://gotenberg:3000"
+#
+# Teto de RAM (único do repo — Chromium sob carga; ver README da role) e
+# /dev/shm (default de 64 MB do Docker derruba o Chromium):
+gotenberg_memory_limit: "1g"
+gotenberg_shm_size: "512M"
+
+# ------------------------------------------------------------
 # Staging — ambiente de homologação co-localizado na MESMA VPS
 # ------------------------------------------------------------
 # Roda lado a lado com produção: mesmo host, mesmo cluster PostgreSQL,
