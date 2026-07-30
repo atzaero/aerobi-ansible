@@ -145,21 +145,20 @@ issues:
       - `docs/automacoes/vaultwarden.md` (ideia #8)
 
   - repo: atzaero/aerobi-ansible
-    title: "feat(vaultwarden): script de onboarding automatizado de novo membro (VW + Headscale + SFTPGo)"
-    labels: [automation, vaultwarden, headscale, sftpgo, priority-medium]
+    title: "feat(vaultwarden): script de onboarding automatizado de novo membro (VW + Headscale)"
+    labels: [automation, vaultwarden, headscale, priority-medium]
     milestone: "Automações backlog"
     body: |
       ## Contexto
 
-      Onboarding manual atual: convidar no Vaultwarden, gerar pre-auth key Headscale, criar user SFTP, entregar tudo. Tudo separado, propenso a erro.
+      Onboarding manual atual: convidar no Vaultwarden, gerar pre-auth key Headscale, entregar tudo. Tudo separado, propenso a erro.
 
       ## Escopo
 
       Script bash único `scripts/onboard-member.sh <email>`:
       1. Convida user via `/admin/invite` do Vaultwarden
       2. Gera pre-auth key Headscale via `docker exec headscale ... preauthkeys create`
-      3. Cria user SFTP via API REST do SFTPGo
-      4. Entrega tudo em `bw send` com expiração 24h
+      3. Entrega tudo em `bw send` com expiração 24h
 
       ## Critério de aceite
 
@@ -591,215 +590,6 @@ issues:
       ## Referências
 
       - `docs/automacoes/headscale.md` (ideia #7)
-
-  # ============================================================
-  # SFTP Go — aerobi-ansible (7 issues)
-  # ============================================================
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): backup do volume sftpgo_data no MinIO"
-    labels: [automation, sftpgo, priority-high]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      Volume `sftpgo_data` tem SQLite (users/configs/audit), host keys SSH (clientes confiam neles), e uploads em `users/<u>/`. Perder = clientes precisam limpar known_hosts e re-cadastrar.
-
-      ## Escopo
-
-      - Cron diário tar do volume → MinIO `aerobi-prod-backups/sftpgo/`
-      - Retention 30d, monitor no Uptime Kuma
-      - Restore testado: garantir que host keys preservadas
-
-      ## Critério de aceite
-
-      - [ ] Script + cron via Ansible
-      - [ ] Restore validado em dev
-      - [ ] Doc atualizado em `docs/automacoes/sftpgo.md`
-
-      ## Esforço / Impacto
-
-      Baixo / Alto
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #1)
-      - Restore com host keys preservadas: `roles/sftpgo/README.md`
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): provisionar users SFTP via Ansible (declarativo)"
-    labels: [automation, sftpgo, priority-high]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      Hoje users SFTP são criados pela UI ou API REST manualmente. Sem source-of-truth declarativa → não dá pra recriar do zero ou auditar.
-
-      ## Escopo
-
-      - Lista declarativa em `inventory/prod/group_vars/all/all.yml`: `sftpgo_users: [...]`
-      - Role `sftpgo` ganha tasks que: criar user, atualizar senha, configurar quotas/permissões
-      - Idempotente: rodar de novo não duplica nem zera
-
-      ## Critério de aceite
-
-      - [ ] Pelo menos 2 users provisionados via Ansible
-      - [ ] Senhas no vault (referenciadas como `vault_sftpgo_user_<name>_password`)
-      - [ ] Documentação em `docs/automacoes/sftpgo.md`
-
-      ## Esforço / Impacto
-
-      Médio / Alto
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #2)
-      - API REST SFTP Go: https://github.com/drakkan/sftpgo/blob/main/openapi/openapi.yaml
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): audit log de uploads/downloads → notificação push"
-    labels: [automation, sftpgo, priority-medium]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      SFTP Go loga cada upload/download em JSON. Push para canal centralizado dá visibilidade do que circula.
-
-      ## Escopo
-
-      - Tail estruturado do log do container (filtrar `event:upload`, `event:download`)
-      - Push para Discord/Telegram (mesmo canal de outros audit logs)
-      - Whitelist de users "ruidosos" para suprimir spam (ex: edge fazendo upload contínuo de gravações)
-
-      ## Critério de aceite
-
-      - [ ] Script + cron
-      - [ ] Push testado
-      - [ ] Whitelist documentada
-
-      ## Esforço / Impacto
-
-      Baixo / Médio
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #3)
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): quotas padrão por user (10GB) + alerta de uso > 80%"
-    labels: [automation, sftpgo, priority-medium]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      Sem limites, um user mal-configurado pode encher o volume e quebrar todos. Quota previne; alerta dá tempo de reagir.
-
-      ## Escopo
-
-      - Defaults da role: cada user criado tem quota 10GB
-      - Cron diário lê uso via API e alerta se > 80%
-      - Override por user via inventory
-
-      ## Critério de aceite
-
-      - [ ] Quotas aplicadas em users existentes (migração)
-      - [ ] Alerta testado
-      - [ ] Override de quota documentado
-
-      ## Esforço / Impacto
-
-      Baixo / Médio
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #4)
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): retention policy para uploads antigos > 90 dias"
-    labels: [automation, sftpgo, priority-medium]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      Uploads antigos (ex: gravações de câmera) acumulam sem necessidade. Política de retenção previne esgotamento + economiza no backup.
-
-      ## Escopo
-
-      - Cron noturno percorre `users/<u>/` e move/deleta arquivos > N dias
-      - Política configurável por user (alguns precisam reter mais)
-      - Dry-run + report antes de habilitar delete real
-
-      ## Critério de aceite
-
-      - [ ] Script com flag `--dry-run` testado
-      - [ ] Política revisada por owner antes de habilitar
-      - [ ] Documentado
-
-      ## Esforço / Impacto
-
-      Médio / Médio
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #5)
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): monitor canário Uptime Kuma (login SFTP + upload/download)"
-    labels: [automation, sftpgo, uptime-kuma, priority-medium]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      `/healthz` só valida HTTP. Detectar quebra real do protocolo SFTP exige login + I/O completos.
-
-      ## Escopo
-
-      - Push monitor no Uptime Kuma chamado por script externo (cron 5min)
-      - Script: login com user canário, upload 1B, download, compare, exit
-      - Alerta se qualquer passo falhar
-
-      ## Critério de aceite
-
-      - [ ] User canário criado (com quota mínima)
-      - [ ] Script de probe rodando
-      - [ ] Push monitor configurado
-
-      ## Esforço / Impacto
-
-      Baixo / Médio
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #6)
-
-  - repo: atzaero/aerobi-ansible
-    title: "feat(sftpgo): hook de upload completo → notificação aerobi-api"
-    labels: [automation, sftpgo, priority-low]
-    milestone: "Automações backlog"
-    body: |
-      ## Contexto
-
-      Quando edge sobe gravação via SFTP, aerobi-api precisa processar (transcodificar, indexar). Hoje exige polling; hook elimina latência.
-
-      ## Escopo
-
-      - SFTP Go suporta hooks pós-upload (CloudCommand/Action)
-      - Configurar webhook para `https://api.aerobi.com.br/internal/sftp/uploaded`
-      - aerobi-api implementa endpoint (issue separada lá)
-
-      ## Critério de aceite
-
-      - [ ] Hook configurado no SFTP Go
-      - [ ] Endpoint do aerobi-api respondendo
-      - [ ] E2E testado: upload → API recebe webhook
-
-      ## Esforço / Impacto
-
-      Médio / Médio
-
-      ## Referências
-
-      - `docs/automacoes/sftpgo.md` (ideia #7)
 
   # ============================================================
   # MinIO — aerobi-ansible (7 issues)

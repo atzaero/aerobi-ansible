@@ -8,7 +8,7 @@ Padrão para nomear endpoints públicos da VPS aerobi. Diferente de projetos com
 |---|---|---|
 | **Produto** (apps de negócio) | `api.`, `app.`, `admin.` | `api.aerobi.com.br`, `app.aerobi.com.br` |
 | **Infra compartilhada** | `vault.`, `s3.`, `headscale.`, `status.` | `vault.aerobi.com.br`, `s3.aerobi.com.br`, `headscale.aerobi.com.br` |
-| **Infra admin-only (tailnet)** | `s3-console.`, `status.`, `sftp.` | acessível só via `tailscale up` |
+| **Infra admin-only (tailnet)** | `s3-console.`, `status.` | acessível só via `tailscale up` |
 
 ## Por que separar (mesmo no domínio único)
 
@@ -31,7 +31,6 @@ Subdomínios em `aerobi.com.br` apontando para `187.127.6.20`:
 | `s3.aerobi.com.br` | infra | MinIO API | 9000 | público | `setup_minio.yml` + `setup_app.yml` (`vhost_client_max_body_size=25m`) |
 | `s3-console.aerobi.com.br` | infra admin | MinIO Console | 9001 | **tailnet-only** | `setup_minio.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`) |
 | `status.aerobi.com.br` | infra admin | Uptime Kuma | 3001 | **tailnet-only** | `setup_uptime_kuma.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`) |
-| `sftp.aerobi.com.br` | infra admin | SFTP Go (web UI) | 8083 | **tailnet-only** | `setup_sftpgo.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true vhost_client_max_body_size=5g`) |
 | `evolution.aerobi.com.br` | infra admin | Evolution GO (manager/QR/Swagger) | 4000 | **tailnet-only** | `setup_evolution_go.yml` + `setup_app.yml` (`vhost_websocket_enabled=true vhost_tailnet_only=true`). API de envio consumida pela aerobi-api via `evolution_go:4000` na `warpgate` |
 | `errors.aerobi.com.br` | infra | GlitchTip (error tracking Sentry-compatible) | 8000 | público | `setup_glitchtip.yml` + `setup_app.yml` (`vhost_client_max_body_size=50m`). Público porque o SDK roda no browser do usuário final (aerobi-web); registro de usuários fechado após setup (issue #27) |
 

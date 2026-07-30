@@ -19,7 +19,6 @@ Priorize por impacto: **provisionamento declarativo dos monitors via Ansible (ho
 | 🟡 Média | [#71](https://github.com/atzaero/aerobi-ansible/issues/71) | feat(postgres): monitor de conexões/locks via pg_stat_activity |
 | 🟡 Média | [#69](https://github.com/atzaero/aerobi-ansible/issues/69) | feat(postgres): monitor de slow queries → alerta |
 | 🟡 Média | [#63](https://github.com/atzaero/aerobi-ansible/issues/63) | feat(minio): alerta de espaço usado > 80% no Uptime Kuma |
-| 🟡 Média | [#57](https://github.com/atzaero/aerobi-ansible/issues/57) | feat(sftpgo): monitor canário Uptime Kuma (login SFTP + upload/download) |
 | 🟡 Média | [#49](https://github.com/atzaero/aerobi-ansible/issues/49) | feat(headscale): monitor canário no Uptime Kuma (API + tailnet alive) |
 | 🟡 Média | [#36](https://github.com/atzaero/aerobi-ansible/issues/36) | feat(vaultwarden): monitor canário no Uptime Kuma validando DB healthy |
 | 🟢 Baixa | [#90](https://github.com/atzaero/aerobi-ansible/issues/90) | feat(ops): healthcheck dashboard automático a partir do Uptime Kuma |

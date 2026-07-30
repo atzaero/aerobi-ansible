@@ -15,7 +15,7 @@ Utilitários operacionais que rodam fora do fluxo dos playbooks Ansible. Ideal p
 | --- | --- | --- |
 | [`migrate-secrets-to-vaultwarden.sh`](#migrate-secrets-to-vaultwardensh) | Lê `vault.yml`, popula org Aerobi no Vaultwarden | Laptop |
 | [`create-automation-issues.py`](#create-automation-issuespy) | Cria issues GitHub a partir de `issue-content/automacoes.yml` | Laptop |
-| [`issue-content/automacoes.yml`](issue-content/automacoes.yml) | Fonte da verdade do backlog de automações (89 issues) | — (data) |
+| [`issue-content/automacoes.yml`](issue-content/automacoes.yml) | Fonte da verdade do backlog de automações (82 issues) | — (data) |
 
 ---
 
@@ -83,7 +83,6 @@ Hoje secrets vivem só em `inventory/prod/group_vars/all/vault.yml`. Quando um h
    - `VPS Deploy User (SSH)` (Network & VPN)
    - `Headscale VPS Pre-Auth Key` (Network & VPN) — Secure Note
    - `Vaultwarden Admin Token` (Services & Admin)
-   - `SFTP Go Web Admin` (Services & Admin)
    - `Vaultwarden SMTP (Gmail)` (External & Third-Party)
 
 ### Idempotência
@@ -153,7 +152,7 @@ Cria issues GitHub no aerobi-ansible e ansible-vps a partir do YAML versionado e
 
 ### Por que existe
 
-Backlog de automações operacionais (89 itens em 2 repos) é fonte da verdade no YAML — issues no GitHub são o materializado. Permite:
+Backlog de automações operacionais (82 itens em 2 repos) é fonte da verdade no YAML — issues no GitHub são o materializado. Permite:
 
 - **Reusar**: o mesmo YAML pode popular issues em projetos derivados.
 - **Versionar**: PR review nas próprias ideias do backlog antes de virarem issues.
@@ -167,7 +166,7 @@ Backlog de automações operacionais (89 itens em 2 repos) é fonte da verdade n
   ```bash
   # Já feito uma vez via script inline (ver feat/automacoes-backlog branch)
   gh label create automation --color FBCA04 --repo <repo>
-  # ... etc para vaultwarden, headscale, sftpgo, minio, postgres, uptime-kuma, valkey, priority-high/medium/low
+  # ... etc para vaultwarden, headscale, minio, postgres, uptime-kuma, valkey, priority-high/medium/low
   gh api -X POST repos/<repo>/milestones -f title="Automações backlog" -f state=open
   ```
 

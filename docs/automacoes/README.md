@@ -4,7 +4,7 @@ Cada arquivo nesta pasta lista o **backlog de automações operacionais** para u
 
 Diferente do `docs/ROLES.md` (que documenta *o que cada role faz*), esta pasta foca em **operações em cima do serviço já provisionado**: cron jobs, scripts auxiliares, integrações entre serviços, hooks de provisionamento, observabilidade extra.
 
-A fonte da verdade das ideias é [`scripts/issue-content/automacoes.yml`](../../scripts/issue-content/automacoes.yml) (89 issues, versionadas e idempotentes via [`scripts/create-automation-issues.py`](../../scripts/create-automation-issues.py)).
+A fonte da verdade das ideias é [`scripts/issue-content/automacoes.yml`](../../scripts/issue-content/automacoes.yml) (82 issues, versionadas e idempotentes via [`scripts/create-automation-issues.py`](../../scripts/create-automation-issues.py)).
 
 ## Padrão de cada arquivo
 
@@ -29,13 +29,12 @@ A fonte da verdade das ideias é [`scripts/issue-content/automacoes.yml`](../../
 |---|---|---|---|
 | Vaultwarden | [`vaultwarden.md`](vaultwarden.md) | 12 | [label:vaultwarden+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Avaultwarden+label%3Aautomation) |
 | Headscale | [`headscale.md`](headscale.md) | 9 | [label:headscale+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Aheadscale+label%3Aautomation) |
-| SFTP Go | [`sftpgo.md`](sftpgo.md) | 8 | [label:sftpgo+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Asftpgo+label%3Aautomation) |
 | MinIO | [`minio.md`](minio.md) | 7 | [label:minio+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Aminio+label%3Aautomation) |
 | PostgreSQL | [`postgres.md`](postgres.md) | 8 | [label:postgres+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Apostgres+label%3Aautomation) |
-| Uptime Kuma | [`uptime-kuma.md`](uptime-kuma.md) | 15 | [label:uptime-kuma+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Auptime-kuma+label%3Aautomation) |
+| Uptime Kuma | [`uptime-kuma.md`](uptime-kuma.md) | 14 | [label:uptime-kuma+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Auptime-kuma+label%3Aautomation) |
 | Valkey | [`valkey.md`](valkey.md) | 6 | [label:valkey+automation](https://github.com/atzaero/aerobi-ansible/issues?q=is%3Aopen+is%3Aissue+label%3Avalkey+label%3Aautomation) |
 
-> "Issues abertas" inclui issues com múltiplos labels de serviço (ex: monitor Postgres no Uptime Kuma aparece em ambos). Total único: **59 issues no aerobi-ansible**.
+> "Issues abertas" inclui issues com múltiplos labels de serviço (ex: monitor Postgres no Uptime Kuma aparece em ambos). Total único: **52 issues no aerobi-ansible** (as 7 do SFTP Go foram fechadas quando o serviço foi removido — issue #170).
 
 ## Repo irmão
 

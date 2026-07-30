@@ -29,7 +29,7 @@ Nada além do baseline. Tudo abaixo é backlog.
 | 2 | Backup diário do volume `vaultwarden_data` no MinIO | Alto | Baixo | MinIO buckets, `mc` |
 | 3 | Aerobi-api consome secrets do Vaultwarden em vez de `.env` | Alto | Alto | `bw serve` na VPS ou SDK |
 | 4 | Rotação periódica de senhas operacionais | Alto | Alto | scripts por serviço |
-| 5 | Onboarding automatizado de novo membro do time | Médio | Médio | `bw send`, scripts Headscale/SFTPGo |
+| 5 | Onboarding automatizado de novo membro do time | Médio | Médio | `bw send`, scripts Headscale |
 | 6 | GitHub Actions puxa secrets do Vaultwarden em vez de GH Secrets | Médio | Médio | runner com acesso à tailnet |
 | 7 | Audit log de acessos ao `/admin` → push Discord/Telegram | Médio | Baixo | parser de logs, webhook |
 | 8 | Monitor "canário" no Uptime Kuma | Médio | Baixo | Uptime Kuma, user canário |

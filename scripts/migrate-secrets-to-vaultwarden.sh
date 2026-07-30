@@ -265,7 +265,7 @@ done
 # -----------------------------------------------------------------------------
 
 banner \
-  "Decriptando 11 secrets do vault.yml do Ansible" \
+  "Decriptando 10 secrets do vault.yml do Ansible" \
   "" \
   "Não vai pedir senha — ansible.cfg aponta para" \
   "  ~/.ansible-vault/aerobi-prod" \
@@ -283,9 +283,8 @@ HEADSCALE_AUTHKEY=$(decrypt_secret vault_headscale_authkey_vps) || err "Falha de
 DEPLOY_PASS=$(decrypt_secret vault_deploy_password) || err "Falha decripta deploy"
 VALKEY_PASS=$(decrypt_secret vault_valkey_password) || err "Falha decripta valkey"
 MINIO_PASS=$(decrypt_secret vault_minio_root_password) || err "Falha decripta minio"
-SFTPGO_ADMIN_PASS=$(decrypt_secret vault_sftpgo_admin_password) || err "Falha decripta sftpgo"
 
-ok "Todos os 11 secrets decriptados em memória"
+ok "Todos os 10 secrets decriptados em memória"
 
 # -----------------------------------------------------------------------------
 # Construção dos items e upsert
@@ -392,22 +391,7 @@ VW_ADMIN_ITEM=$(jq -n --arg tok "$VW_ADMIN_TOKEN" --argjson f "$(field_hidden "a
 }')
 upsert_item SERVICES "Vaultwarden Admin Token" "$VW_ADMIN_ITEM"
 
-# 7. SFTP Go Admin (Services & Admin)
-SFTPGO_ITEM=$(jq -n --arg pass "$SFTPGO_ADMIN_PASS" '
-{
-  name: "SFTP Go Web Admin",
-  type: 1,
-  notes: "Admin do web UI do SFTP Go (criar/editar users SFTP).\nAcesso: tailnet (vhost tailnet-only).\nUsers SFTP de fato são criados pela UI e ficam na tabela users do SQLite.",
-  login: {
-    username: "admin",
-    password: $pass,
-    uris: [{uri: "https://sftp.aerobi.com.br/web/admin", match: null}]
-  },
-  fields: []
-}')
-upsert_item SERVICES "SFTP Go Web Admin" "$SFTPGO_ITEM"
-
-# 8. Vaultwarden SMTP (External & Third-Party)
+# 7. Vaultwarden SMTP (External & Third-Party)
 SMTP_ITEM=$(jq -n --arg pass "$VW_SMTP_PASS" '
 {
   name: "Vaultwarden SMTP (Gmail)",

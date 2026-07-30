@@ -730,9 +730,6 @@ headscale_extra_dns_records:
   - name: status.aerobi.com.br
     type: A
     value: 100.64.0.1
-  - name: sftp.aerobi.com.br
-    type: A
-    value: 100.64.0.1
 ```
 
 ### Por que isso é necessário para vhosts tailnet-only

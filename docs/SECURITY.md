@@ -30,8 +30,7 @@ abre pra um atacante na porta 443/22 — e o que abre se o Headscale cair?".
    → bind `127.0.0.1`, exposição só via nginx.
 3. **Exposição tailnet via Docker `-p`** — `-p 100.64.0.1:porta:porta` sofre o mesmo
    NAT bypass do UFW. → exposição tailnet **só** via socat sidecar
-   (`network_mode: host`); ver `roles/postgres_tailnet_proxy/`,
-   `roles/sftpgo_tailnet_proxy/`.
+   (`network_mode: host`); ver `roles/postgres_tailnet_proxy/`.
 4. **Comprometimento do control plane Headscale** — **alvo de altíssimo valor**:
    quem o domina emite pre-auth keys e entra na tailnet inteira (acesso a TODOS os
    serviços admin tailnet-only). → API/keys não expostas, ACLs mínimas, segredos do

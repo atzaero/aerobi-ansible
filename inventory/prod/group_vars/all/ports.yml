@@ -22,7 +22,7 @@
 #   - Apps de produto vivem na faixa 3xxx.
 #   - prod:  aerobi-web=3000, aerobi-api=3333 (já em produção).
 #   - staging = porta de prod + 100  (regra estável e previsível).
-#   - Portas de infra (postgres, valkey, minio, headscale, sftpgo, ...) NÃO
+#   - Portas de infra (postgres, valkey, minio, headscale, ...) NÃO
 #     entram aqui — ficam em all.yml como `<servico>_port`. Mapa completo
 #     de TODAS as portas em uso: docs/PORTAS.md.
 #
