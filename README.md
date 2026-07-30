@@ -33,8 +33,6 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `valkey` | Fork OSS do Redis (cache/filas/sessões) | `roles/valkey/README.md` |
 | `minio` | Object storage S3-compatible + buckets declarativos | `roles/minio/README.md` |
 | `uptime_kuma` | Status + monitoring + Domain Name Expiry | `roles/uptime_kuma/README.md` |
-| `sftpgo` | Servidor SFTP em Go com web admin (SQLite, tailnet-only) | `roles/sftpgo/README.md` |
-| `sftpgo_tailnet_proxy` | Sidecar socat — expõe SFTP em `100.64.0.1:2022` via tailnet | |
 | `glitchtip` | Error tracking self-hosted compatível com SDKs Sentry (público) | `roles/glitchtip/README.md` |
 | `gotenberg` | HTML→PDF via Chromium (API stateless interna, staging+prod) | `roles/gotenberg/README.md` |
 | `mediamtx` | RTSP→HLS fan-out (câmeras IP, edge) | |
@@ -52,7 +50,6 @@ Automação Ansible da infraestrutura aerobi (VPS Hostinger Ubuntu 24.04 + Raspb
 | `setup_valkey.yml` | docker_network → valkey | Cache/filas (sem vhost) |
 | `setup_minio.yml` | docker_network → minio (+ buckets) | Object storage |
 | `setup_uptime_kuma.yml` | docker_network → uptime_kuma | Monitoring (vhost via setup_app.yml) |
-| `setup_sftpgo.yml` | docker_network → sftpgo → sftpgo_tailnet_proxy | Servidor SFTP (vhost via setup_app.yml, tailnet-only) |
 | `setup_glitchtip.yml` | postgres_databases → glitchtip | Error tracking (vhost público via setup_app.yml) |
 | `setup_gotenberg.yml` | docker_network → gotenberg | HTML→PDF interno (sem vhost, sem porta no host) |
 | `setup_app.yml` | nginx_vhost (parametrizado) | Vhost + cert para qualquer app |
@@ -112,7 +109,6 @@ ansible-playbook playbooks/setup_vaultwarden.yml
 ansible-playbook playbooks/setup_valkey.yml
 ansible-playbook playbooks/setup_minio.yml
 ansible-playbook playbooks/setup_uptime_kuma.yml
-ansible-playbook playbooks/setup_sftpgo.yml
 ansible-playbook playbooks/setup_glitchtip.yml
 ansible-playbook playbooks/setup_gotenberg.yml
 # 10. Vhosts admin-only / públicos

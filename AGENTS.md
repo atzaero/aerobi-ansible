@@ -9,7 +9,7 @@ O `CLAUDE.md` apenas referencia este arquivo (`@AGENTS.md`) + notas específicas
 Automação **Ansible** da infraestrutura aerobi: provisiona uma VPS Hostinger
 (Ubuntu 24.04) a partir do zero — hardening base, plataforma de dados (Postgres,
 MinIO, Valkey), mesh VPN **Headscale self-hosted**, serviços admin (Vaultwarden,
-Uptime Kuma, SFTPGo) atrás de nginx reverse proxy + Let's Encrypt + tailnet, e
+Uptime Kuma) atrás de nginx reverse proxy + Let's Encrypt + tailnet, e
 edge nodes (Raspberry Pi de aeródromo com MediaMTX RTSP→HLS).
 
 Filosofia: **baseline enxuto**. O repo provê infra; o app de produto (`aerobi-api`)
@@ -24,7 +24,7 @@ faz deploy externo via Actions. Ver `README.md → O que este projeto entrega`.
 | Proxy/TLS | nginx reverse proxy + Certbot (Let's Encrypt) |
 | Dados | PostgreSQL 17, MinIO (S3), Valkey |
 | VPN | **Headscale self-hosted** (control plane Tailscale-compatible) + tailscale_client |
-| Admin | Vaultwarden, Uptime Kuma, SFTPGo (tailnet-only) |
+| Admin | Vaultwarden, Uptime Kuma (tailnet-only) |
 | Edge | `aerodrome_edge` (Raspberry Pi subnet router) + MediaMTX (RTSP→HLS) |
 | Hardening | `ssh_hardening`, `firewall` (UFW deny-default), `fail2ban` |
 | Secrets | Ansible Vault **per-value** (não file-level) |
@@ -49,8 +49,8 @@ Bootstrap fresh: VPS recém-formatada **não tem `deploy`** ainda → usar
 
 | Área | O que tem |
 |---|---|
-| `playbooks/` | `setup_vps.yml` (hardening + base), `setup_database.yml`, `setup_app_databases.yml`, `setup_headscale.yml`, `setup_minio.yml`, `setup_vaultwarden.yml`, `setup_valkey.yml`, `setup_uptime_kuma.yml`, `setup_sftpgo.yml`, `setup_postgres_tailnet.yml`, `setup_aerodrome.yml`, `setup_staging.yml`, `setup_app.yml` (vhost+TLS por app) |
-| `roles/` | `common`, `user`, `ssh_hardening`, `firewall`, `fail2ban`, `docker`, `docker_network`, `nginx`, `nginx_vhost`, `postgres`, `postgres_databases`, `postgres_tailnet_proxy`, `minio`, `valkey`, `vaultwarden`, `sftpgo`, `sftpgo_tailnet_proxy`, `uptime_kuma`, `headscale`, `tailscale_client`, `mediamtx`, `aerodrome_edge` |
+| `playbooks/` | `setup_vps.yml` (hardening + base), `setup_database.yml`, `setup_app_databases.yml`, `setup_headscale.yml`, `setup_minio.yml`, `setup_vaultwarden.yml`, `setup_valkey.yml`, `setup_uptime_kuma.yml`, `setup_postgres_tailnet.yml`, `setup_aerodrome.yml`, `setup_staging.yml`, `setup_app.yml` (vhost+TLS por app) |
+| `roles/` | `common`, `user`, `ssh_hardening`, `firewall`, `fail2ban`, `docker`, `docker_network`, `nginx`, `nginx_vhost`, `postgres`, `postgres_databases`, `postgres_tailnet_proxy`, `minio`, `valkey`, `vaultwarden`, `uptime_kuma`, `headscale`, `tailscale_client`, `mediamtx`, `aerodrome_edge` |
 | `inventory/{dev,dev-aerodrome,prod}/` | `hosts.yml` + `group_vars`/`host_vars` (prod usa `group_vars/all/{all.yml,vault.yml}`) |
 | `docs/` | runbooks operacionais (ver tabela no fim) |
 | `molecule/` | cenário `default` (teste em Docker) |
@@ -87,13 +87,13 @@ deny default — o Docker insere regras `iptables -t nat` avaliadas **antes** do
 ### 3. Serviços expostos via tailnet usam socat sidecar com `network_mode: host`
 
 NÃO usar `-p 100.64.0.1:porta:porta` no `docker_container` — mesmo motivo da regra 2
-(Docker NAT bypass). Padrão estabelecido em `roles/postgres_tailnet_proxy/` e
-`roles/sftpgo_tailnet_proxy/`: container `alpine/socat` separado, `network_mode: host`,
+(Docker NAT bypass). Padrão estabelecido em `roles/postgres_tailnet_proxy/`:
+container `alpine/socat` separado, `network_mode: host`,
 escutando direto na interface `tailscale0`.
 
 ### 4. Imagens distroless: usar healthcheck nativo
 
-Várias imagens em uso (drakkan/sftpgo, vaultwarden/server) são distroless — não têm
+Várias imagens em uso (ex.: vaultwarden/server) são distroless — não têm
 `curl`, `wget`, `nc`. Antes de definir `healthcheck.test` com utilitários shell,
 verificar:
 
@@ -101,7 +101,7 @@ verificar:
 docker exec <container> sh -c "command -v curl wget nc"
 ```
 
-Se nada disponível, procurar healthcheck próprio do binário (ex: `sftpgo ping`).
+Se nada disponível, procurar healthcheck próprio do binário.
 
 ### 5. Secrets sempre em vault, validação fail-fast nas roles
 
@@ -130,7 +130,7 @@ documentado no header do `inventory/prod/group_vars/all/vault.yml`.
 
 ### 6. Merges e operações destrutivas
 
-- Branches: `<tipo>/<num-issue>-<slug>` (ex: `feat/12-sftpgo`, `fix/7-docker-nat`).
+- Branches: `<tipo>/<num-issue>-<slug>` (ex: `feat/168-gotenberg`, `fix/7-docker-nat`).
 - Commits Conventional Commits em **PT-BR** (`feat(escopo): descrição`).
 - Base branch: `main` (não `develop`).
 - Merge via `gh pr merge --merge --delete-branch` (sem squash, sem rebase, salvo
@@ -195,7 +195,7 @@ Este repo vive no **GitHub** (`atzaero/aerobi-ansible`) → usar **`gh` CLI** + 
 Endpoints públicos seguem regra estrita (ver `docs/DOMINIOS.md`):
 
 - **Infra aerobi** → subdomínios em `aerobi.com.br` (DNS no Registro.br).
-- Subdomínios tailnet-only (vault, s3-console, status, sftp) resolvem para
+- Subdomínios tailnet-only (vault, s3-console, status) resolvem para
   `100.64.0.1` via `headscale_extra_dns_records` (ver regra 1).
 
 Serviço novo: escolher subdomínio em `aerobi.com.br`, atualizar `docs/DOMINIOS.md`

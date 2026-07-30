@@ -5,7 +5,7 @@ relacionados por funcionalidade/contexto.
 
 ## Contexto aerobi-ansible
 
-- Branch no formato `<tipo>/<num-issue>-<slug-curto>` (ex: `feat/12-sftpgo`,
+- Branch no formato `<tipo>/<num-issue>-<slug-curto>` (ex: `feat/168-gotenberg`,
   `fix/7-docker-nat`).
 - Tipo do commit deve bater com tipo do branch — `feat/12-...` só produz
   commits `feat(...)`.
@@ -35,13 +35,13 @@ Formato: `tipo(escopo opcional): descrição`
 | `refactor` | Reestruturação sem mudança comportamental |
 | `test` | Adição/correção de Molecule scenarios |
 
-Exemplos: `feat(sftpgo): ...`, `chore(vault): ...`, `fix(headscale): ...`.
+Exemplos: `feat(minio): ...`, `chore(vault): ...`, `fix(headscale): ...`.
 
 ## Escopos comuns no projeto
 
 - `vault` — secrets em `inventory/prod/group_vars/all/vault.yml`
 - `inventory` — dev/prod/all.yml, hosts.yml, host_vars
-- `<nome-da-role>` — `headscale`, `sftpgo`, `minio`, `postgres`, `nginx_vhost`,
+- `<nome-da-role>` — `headscale`, `minio`, `postgres`, `nginx_vhost`,
   `mediamtx`, `aerodrome_edge`, `ssh_hardening`, etc
 - `playbook` — quando é mudança em `playbooks/*.yml` que cruza roles
 - `ci` — `.github/workflows/`, hooks

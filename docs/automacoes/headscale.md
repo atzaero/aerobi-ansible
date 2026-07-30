@@ -16,7 +16,7 @@ Priorize por impacto: **rotação de pre-auth keys (sem isso a VPS reiniciada n�
 | 🟡 Média | [#49](https://github.com/atzaero/aerobi-ansible/issues/49) | feat(headscale): monitor canário no Uptime Kuma (API + tailnet alive) |
 | 🟡 Média | [#48](https://github.com/atzaero/aerobi-ansible/issues/48) | feat(headscale): validar ACL em CI antes de aplicar (JSON + lógica) |
 | 🟡 Média | [#47](https://github.com/atzaero/aerobi-ansible/issues/47) | feat(headscale): cleanup automático de nodes inativos > 90 dias |
-| 🟡 Média | [#37](https://github.com/atzaero/aerobi-ansible/issues/37) | feat(vaultwarden): script de onboarding automatizado de novo membro (VW + Headscale + SFTPGo) |
+| 🟡 Média | [#37](https://github.com/atzaero/aerobi-ansible/issues/37) | feat(vaultwarden): script de onboarding automatizado de novo membro (VW + Headscale) |
 | 🟢 Baixa | [#51](https://github.com/atzaero/aerobi-ansible/issues/51) | feat(headscale): versionar mudanças na ACL com diff visível |
 | 🟢 Baixa | [#50](https://github.com/atzaero/aerobi-ansible/issues/50) | feat(headscale): relatório semanal de devices conectados via API |
 

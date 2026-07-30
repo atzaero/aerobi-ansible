@@ -39,8 +39,6 @@ UFW na VPS Aerobi é restritivo: tudo bloqueado por padrão, apenas o que está 
 | 6379 | Valkey | `127.0.0.1` | Apps via rede docker `warpgate` (sem vhost) |
 | 8000 | GlitchTip | `127.0.0.1` | Apenas via Nginx em `errors.aerobi.com.br` (**público** — SDKs Sentry enviam eventos do browser do usuário final direto pro DSN). Container único `all_in_one`; fila/cache no Postgres compartilhado (issue #27) |
 | 8080 | Headscale | `127.0.0.1` | Apenas via Nginx em `headscale.aerobi.com.br` |
-| 8083 | SFTP Go (web admin/API) | `127.0.0.1` | Apenas via Nginx em `sftp.aerobi.com.br` (tailnet-only). Porta 8080 do container é remapeada para 8083 no host porque 8080 já é do Headscale |
-| 2022 | SFTP Go (SFTP server) | `127.0.0.1` + `100.64.0.1` (tailnet via socat sidecar) | Clientes SFTP via tailnet em `100.64.0.1:2022` — `roles/sftpgo_tailnet_proxy/`, mesmo padrão do postgres |
 | 9000 | MinIO API | `127.0.0.1` | Apenas via Nginx em `s3.aerobi.com.br` (apps internos via `minio:9000` na rede docker) |
 | 9001 | MinIO Console | `127.0.0.1` | Apenas via Nginx em `s3-console.aerobi.com.br` (tailnet-only) |
 
@@ -65,7 +63,6 @@ Endpoints administrativos não devem ficar expostos publicamente. O padrão da p
 | `https://vault.aerobi.com.br/admin` | Painel admin do Vaultwarden — convidar usuários, configurar SMTP, etc. Login `/` continua público para extensão Bitwarden e app mobile. ACL path-level no template próprio da role vaultwarden. |
 | `https://s3-console.aerobi.com.br` | Painel MinIO admin — criar/deletar buckets, gerar access keys. Vhost-level via flag `vhost_tailnet_only=true` em `setup_app.yml`. |
 | `https://status.aerobi.com.br` | Painel Uptime Kuma — criar/editar monitores, canais de notificação. Vhost-level via `vhost_tailnet_only=true`. |
-| `https://sftp.aerobi.com.br` | Web admin do SFTP Go — criar/editar users SFTP, ver logs. Servidor SFTP também só pela tailnet (`100.64.0.1:2022`). Vhost-level via `vhost_tailnet_only=true`. |
 | `https://evolution.aerobi.com.br` | Manager/QR/Swagger da Evolution GO (gateway WhatsApp). A API de envio que dispara mensagens do número do negócio é consumida só internamente pela aerobi-api (`evolution_go:4000` na `warpgate`), nunca pública. Vhost-level via `vhost_tailnet_only=true`. |
 
 ### Como aplicar em novo serviço admin

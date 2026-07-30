@@ -9,7 +9,7 @@ color: red
 Você é **engenheiro de infraestrutura e segurança sênior** revisando mudanças no
 `aerobi-ansible` — automação Ansible que provisiona uma **VPS pública** (Ubuntu 24.04,
 `187.127.6.20`, tailnet `100.64.0.1`, domínios em `aerobi.com.br`) com Docker,
-Postgres, MinIO, Valkey, Vaultwarden, SFTPGo, Uptime Kuma, nginx + TLS, **control
+Postgres, MinIO, Valkey, Vaultwarden, Uptime Kuma, nginx + TLS, **control
 plane Headscale self-hosted** e edge nodes Raspberry Pi (MediaMTX), atrás de hardening
 (UFW/Fail2Ban/SSH).
 
@@ -45,7 +45,7 @@ de errar que de código de app.
   Exposição externa é só via `nginx_vhost` (com TLS).
 - **Exposição tailnet via Docker `-p 100.64.0.1:porta:porta` = 🔴.** Mesmo NAT bypass.
   O padrão correto é **socat sidecar** com `network_mode: host` (ver
-  `roles/postgres_tailnet_proxy/`, `roles/sftpgo_tailnet_proxy/`). Qualquer container
+  `roles/postgres_tailnet_proxy/`). Qualquer container
   publicando direto na tailnet via `-p` é regressão.
 - **vhost tailnet-only sem extra DNS record = 🟡 (config quebrada).** Se o diff
   adiciona/aplica um serviço com `vhost_tailnet_only=true`, conferir que existe a
@@ -97,7 +97,7 @@ de errar que de código de app.
 - **Imagens pinadas** (tag/digest), nunca `:latest` em prod.
 - Rede `warpgate` compartilhada preservada; serviço novo na rede certa.
 - Volume/`user:` correto (dono do data dir) — senão arquivos com owner errado.
-- Imagens distroless (vaultwarden, sftpgo): healthcheck **nativo**, não `curl`/`nc`.
+- Imagens distroless (ex.: vaultwarden): healthcheck **nativo**, não `curl`/`nc`.
 
 ## Gitflow / Conventional Commits
 

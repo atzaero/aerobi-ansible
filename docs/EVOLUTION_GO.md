@@ -98,7 +98,7 @@ A `aerobi-api` roda **na mesma VPS, na rede `warpgate`**. Portanto:
 
 - **Exposição pública: nenhuma.** O vhost `evolution.aerobi.com.br` fica
   **tailnet-only** (`vhost_tailnet_only=true` + `headscale_extra_dns_records` →
-  `100.64.0.1`), igual a `s3-console`/`status`/`sftp`. Serve só p/ humano
+  `100.64.0.1`), igual a `s3-console`/`status`. Serve só p/ humano
   acessar manager/QR/Swagger via tailnet. A API de envio do WhatsApp (que dispara
   mensagens do número do negócio) **não** vai para a internet.
 - **A aerobi-api consome pela rede interna**: `EVOLUTION_GO_BASE_URL=http://evolution_go:4000`
